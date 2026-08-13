@@ -172,8 +172,11 @@ class GatewayService : Service() {
         config: GatewayConfig,
     ) = withContext(Dispatchers.IO) {
         val configFile = File(paths.openclawRoot, ".openclaw/openclaw.json")
-        val root = JSONObject()
-        val env = JSONObject()
+        val root = runCatching {
+            if (configFile.exists()) JSONObject(configFile.readText()) else JSONObject()
+        }.getOrDefault(JSONObject())
+        val existingEnv = root.optJSONObject("env")
+        val env = existingEnv ?: JSONObject()
         if (config.apiKeys.deepseek.isNotBlank() || config.defaultModel.isNotBlank()) {
             env.put("DEEPSEEK_API_KEY", config.apiKeys.deepseek)
         }
@@ -183,9 +186,7 @@ class GatewayService : Service() {
         if (config.apiKeys.anthropic.isNotBlank()) {
             env.put("ANTHROPIC_API_KEY", config.apiKeys.anthropic)
         }
-        if (env.length() > 0) {
-            root.put("env", env)
-        }
+        root.put("env", env)
         if (config.apiKeys.deepseek.isNotBlank()) {
             val providers = JSONObject().put(
                 "deepseek",
@@ -220,8 +221,13 @@ class GatewayService : Service() {
                     .put("model", model)
                     .put("timeoutSeconds", 600),
             )
-            root.put("models", JSONObject().put("mode", "merge").put("providers", providers))
-            root.put("agents", agents)
+            val mergedModels = root.optJSONObject("models") ?: JSONObject()
+            mergedModels.put("providers", providers)
+            root.put("models", mergedModels)
+
+            val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
+            mergedAgents.put("defaults", agents.optJSONObject("defaults"))
+            root.put("agents", mergedAgents)
         }
         FileUtil.atomicWriteText(configFile, root.toString(2))
     }
