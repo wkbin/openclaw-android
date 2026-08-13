@@ -1,0 +1,349 @@
+package com.openclaw.android.repository
+
+import android.content.Context
+import com.openclaw.android.model.UpdateFailureReason
+import com.openclaw.android.model.UpdateState
+import com.openclaw.android.util.FileUtil
+import com.openclaw.android.util.TarUtil
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.security.MessageDigest
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class UpdateRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val client: OkHttpClient,
+    private val json: Json,
+    private val settingsRepository: SettingsRepository,
+) {
+    private val mutex = Mutex()
+    private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val state: StateFlow<UpdateState> = _state.asStateFlow()
+
+    private var available: UpdateState.Available? = null
+    private var pendingArchive: File? = null
+
+    suspend fun checkForUpdates(owner: String, repo: String) = mutex.withLock {
+        _state.value = UpdateState.Checking
+        val currentVersion = activeVersion()
+        try {
+            val release = fetchLatestRelease(owner, repo)
+            val asset = release.assets.firstOrNull { asset ->
+                asset.name.matches(
+                    Regex("openclaw-v[0-9A-Za-z.+-]+-android-arm64\\.tar\\.gz"),
+                )
+            }
+            if (asset == null) {
+                available = null
+                _state.value = UpdateState.UpToDate
+                return@withLock
+            }
+
+            val latest = release.tagName.removePrefix("v")
+            if (compareVersions(latest, currentVersion) <= 0) {
+                available = null
+                _state.value = UpdateState.UpToDate
+                return@withLock
+            }
+
+            val next = UpdateState.Available(
+                latestVersion = latest,
+                currentVersion = currentVersion,
+                releaseNotes = release.body ?: "",
+                downloadSizeBytes = asset.size,
+                assetUrl = asset.browserDownloadUrl,
+                sha256Url = "${asset.browserDownloadUrl}.sha256",
+            )
+            available = next
+            _state.value = next
+        } catch (error: Exception) {
+            _state.value = UpdateState.Failed(
+                reason = UpdateFailureReason.Network,
+                failedVersion = null,
+                activeVersion = currentVersion,
+                canRetry = true,
+                message = error.message ?: "检查更新失败",
+            )
+        }
+    }
+
+    suspend fun downloadLatest() = mutex.withLock {
+        val release = available ?: (_state.value as? UpdateState.Available)
+            ?: return@withLock
+        val version = release.latestVersion
+        val downloadsDir = File(openclawRoot(), "downloads").apply { mkdirs() }
+        val partFile = File(downloadsDir, "openclaw-v$version-android-arm64.tar.gz.part")
+        val archiveFile = File(downloadsDir, "openclaw-v$version-android-arm64.tar.gz")
+
+        try {
+            if (!archiveFile.exists()) {
+                downloadWithRange(
+                    url = release.assetUrl,
+                    partFile = partFile,
+                    version = version,
+                    expectedTotal = release.downloadSizeBytes,
+                )
+                if (!partFile.renameTo(archiveFile)) {
+                    throw IOException("无法完成下载文件写入")
+                }
+            }
+
+            _state.value = UpdateState.Verifying(version)
+            val expected = fetchSha256(release.sha256Url)
+            val actual = sha256(archiveFile)
+            if (!expected.equals(actual, ignoreCase = true)) {
+                FileUtil.deleteRecursively(archiveFile)
+                FileUtil.deleteRecursively(partFile)
+                _state.value = UpdateState.Failed(
+                    reason = UpdateFailureReason.ChecksumMismatch,
+                    failedVersion = version,
+                    activeVersion = activeVersion(),
+                    canRetry = true,
+                    message = "SHA256 校验失败，已删除损坏文件",
+                )
+                return@withLock
+            }
+
+            pendingArchive = archiveFile
+            _state.value = UpdateState.Verifying(version)
+        } catch (error: Exception) {
+            _state.value = UpdateState.Failed(
+                reason = UpdateFailureReason.Network,
+                failedVersion = version,
+                activeVersion = activeVersion(),
+                canRetry = true,
+                message = error.message ?: "下载失败",
+            )
+        }
+    }
+
+    suspend fun installDownloadedArchive() = mutex.withLock {
+        val verifying = _state.value as? UpdateState.Verifying ?: return@withLock
+        val archive = pendingArchive ?: return@withLock
+        val version = verifying.version
+        val fromVersion = activeVersion()
+
+        _state.value = UpdateState.Installing(
+            fromVersion = fromVersion,
+            toVersion = version,
+        )
+
+        try {
+            withContext(Dispatchers.IO) {
+                val root = openclawRoot().apply { mkdirs() }
+                val versionsDir = File(root, "versions").apply { mkdirs() }
+                val backupsDir = File(root, "backups").apply { mkdirs() }
+                val temporary = File(versionsDir, "$version.tmp")
+                val target = File(versionsDir, version)
+
+                FileUtil.deleteRecursively(temporary)
+                TarUtil.extractTarGz(archive, temporary)
+
+                if (fromVersion != version) {
+                    backupVersion(fromVersion, versionsDir, backupsDir)
+                }
+
+                if (target.exists()) {
+                    FileUtil.deleteRecursively(target)
+                }
+                if (!temporary.renameTo(target)) {
+                    throw IOException("版本目录切换失败")
+                }
+
+                FileUtil.atomicWriteText(File(root, "current-version"), version)
+                settingsRepository.setLastVersion(version)
+            }
+
+            pendingArchive = null
+            _state.value = UpdateState.RestartingGateway(version)
+        } catch (error: Exception) {
+            _state.value = UpdateState.Failed(
+                reason = UpdateFailureReason.ExtractFailed,
+                failedVersion = version,
+                activeVersion = fromVersion,
+                canRetry = true,
+                message = error.message ?: "安装失败",
+            )
+        }
+    }
+
+    suspend fun markHealthCheckPassed(version: String) = mutex.withLock {
+        _state.value = UpdateState.Completed(version = version)
+    }
+
+    suspend fun markHealthCheckFailed(
+        version: String,
+        cause: String,
+    ) = mutex.withLock {
+        val active = activeVersion()
+        _state.value = UpdateState.Failed(
+            reason = UpdateFailureReason.GatewayHealthCheckFailed,
+            failedVersion = version,
+            activeVersion = active,
+            rollbackVersion = active,
+            canRetry = false,
+            message = cause,
+        )
+    }
+
+    suspend fun reset() = mutex.withLock {
+        available = null
+        pendingArchive = null
+        _state.value = UpdateState.Idle
+    }
+
+    private suspend fun activeVersion(): String {
+        val pointer = File(openclawRoot(), "current-version")
+        if (pointer.exists()) {
+            val fromPointer = pointer.readText().trim()
+            if (fromPointer.isNotEmpty()) return fromPointer
+        }
+        return settingsRepository.config.first().lastVersion
+    }
+
+    private fun openclawRoot(): File = File(context.filesDir, "openclaw")
+
+    private suspend fun backupVersion(
+        version: String,
+        versionsDir: File,
+        backupsDir: File,
+    ) {
+        val source = File(versionsDir, version)
+        if (!source.exists()) return
+        val target = File(backupsDir, version)
+        FileUtil.deleteRecursively(target)
+        withContext(Dispatchers.IO) {
+            source.copyRecursively(target, overwrite = true)
+        }
+    }
+
+    private suspend fun fetchLatestRelease(owner: String, repo: String): ReleaseDto =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url("https://api.github.com/repos/$owner/$repo/releases/latest")
+                .header("Accept", "application/vnd.github+json")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("GitHub API ${response.code}")
+                }
+                json.decodeFromString<ReleaseDto>(
+                    response.body?.string() ?: error("Empty GitHub response"),
+                )
+            }
+        }
+
+    private suspend fun downloadWithRange(
+        url: String,
+        partFile: File,
+        version: String,
+        expectedTotal: Long,
+    ) = withContext(Dispatchers.IO) {
+        partFile.parentFile?.mkdirs()
+        var offset = partFile.length()
+        val requestBuilder = Request.Builder().url(url)
+        if (offset > 0L) {
+            requestBuilder.header("Range", "bytes=$offset-")
+        }
+
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            if (!response.isSuccessful && response.code != 206) {
+                throw IOException("下载响应 ${response.code}")
+            }
+            val body = response.body ?: throw IOException("下载响应为空")
+            val append = response.code == 206 && offset > 0L
+            if (!append) {
+                offset = 0L
+                partFile.delete()
+            }
+            val total = if (expectedTotal > 0L) expectedTotal
+                else (body.contentLength() + offset).coerceAtLeast(1L)
+
+            FileOutputStream(partFile, append).use { output ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var read = input.read(buffer)
+                    while (read >= 0) {
+                        if (read > 0) {
+                            output.write(buffer, 0, read)
+                            offset += read
+                            _state.value = UpdateState.Downloading(
+                                version = version,
+                                receivedBytes = offset,
+                                totalBytes = total,
+                            )
+                        }
+                        read = input.read(buffer)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun fetchSha256(url: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("SHA256 文件响应 ${response.code}")
+            }
+            response.body?.string()?.trim()?.substringBefore(' ')?.substringBefore('\t') ?: ""
+        }
+    }
+
+    private suspend fun sha256(file: File): String = withContext(Dispatchers.IO) {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var read = input.read(buffer)
+            while (read >= 0) {
+                if (read > 0) digest.update(buffer, 0, read)
+                read = input.read(buffer)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun compareVersions(left: String, right: String): Int {
+        val a = left.split('.').map { it.toIntOrNull() ?: 0 }
+        val b = right.split('.').map { it.toIntOrNull() ?: 0 }
+        val size = maxOf(a.size, b.size)
+        for (index in 0 until size) {
+            val av = a.getOrElse(index) { 0 }
+            val bv = b.getOrElse(index) { 0 }
+            if (av != bv) return av.compareTo(bv)
+        }
+        return 0
+    }
+
+    @Serializable
+    private data class ReleaseDto(
+        @SerialName("tag_name") val tagName: String,
+        val body: String? = null,
+        val assets: List<ReleaseAssetDto> = emptyList(),
+    )
+
+    @Serializable
+    private data class ReleaseAssetDto(
+        val name: String,
+        val size: Long,
+        @SerialName("browser_download_url") val browserDownloadUrl: String,
+    )
+}
+

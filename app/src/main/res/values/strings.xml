@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">OpenClaw</string>
+    <string name="notification_channel_gateway">网关运行状态</string>
+    <string name="notification_running">OpenClaw 运行中 · 端口 %1$d</string>
+    <string name="notification_starting">OpenClaw 正在启动</string>
+    <string name="notification_stop">停止</string>
+</resources>
+
