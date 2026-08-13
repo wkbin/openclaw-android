@@ -311,8 +311,13 @@ class OpenClawChatClient @Inject constructor(
 
         val current = _messages.value
         val last = current.lastOrNull()
-        if (state == "delta" && last?.role == "assistant") {
-            _messages.value = current.dropLast(1) + last.copy(text = last.text + text)
+        if ((state == "delta" || state == "final") && last?.role == "assistant") {
+            val merged = if (state == "delta") {
+                last.copy(text = last.text + text)
+            } else {
+                last.copy(text = text)
+            }
+            _messages.value = current.dropLast(1) + merged
         } else {
             appendMessage(
                 ChatMessage(

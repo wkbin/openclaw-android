@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -61,12 +62,19 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     BackHandler(onBack = onBack)
 
     DisposableEffect(viewModel) {
         viewModel.start()
         onDispose { viewModel.stop() }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
     }
 
     ModalNavigationDrawer(
@@ -169,6 +177,7 @@ fun ChatScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
@@ -216,4 +225,3 @@ private fun MessageBubble(message: ChatMessage) {
         }
     }
 }
-
