@@ -12,6 +12,10 @@ data class GatewayConfig(
     val startupArgs: List<String> = emptyList(),
     val lastVersion: String = "bootstrap",
     val gatewayToken: String = "",
+    val themeMode: String = "system",
+    val uiScale: Float = 1f,
+    val setupCompleted: Boolean = false,
+    val defaultModel: String = "deepseek/deepseek-v4-flash",
 )
 
 @Serializable

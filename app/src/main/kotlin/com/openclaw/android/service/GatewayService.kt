@@ -174,7 +174,7 @@ class GatewayService : Service() {
         val configFile = File(paths.openclawRoot, ".openclaw/openclaw.json")
         val root = JSONObject()
         val env = JSONObject()
-        if (config.apiKeys.deepseek.isNotBlank()) {
+        if (config.apiKeys.deepseek.isNotBlank() || config.defaultModel.isNotBlank()) {
             env.put("DEEPSEEK_API_KEY", config.apiKeys.deepseek)
         }
         if (config.apiKeys.openai.isNotBlank()) {
@@ -210,23 +210,16 @@ class GatewayService : Service() {
                             ),
                     ),
             )
-            val model = JSONObject().put("primary", "deepseek/deepseek-v4-flash")
-            val agents = JSONObject()
-                .put(
-                    "defaults",
-                    JSONObject()
-                        .put("model", model)
-                        .put("timeoutSeconds", 600),
-                )
-                .put(
-                    "list",
-                    JSONArray().put(
-                        JSONObject()
-                            .put("id", "main")
-                            .put("model", model)
-                            .put("timeoutSeconds", 600),
-                    ),
-                )
+            val model = JSONObject().put(
+                "primary",
+                config.defaultModel.ifBlank { "deepseek/deepseek-v4-flash" },
+            )
+            val agents = JSONObject().put(
+                "defaults",
+                JSONObject()
+                    .put("model", model)
+                    .put("timeoutSeconds", 600),
+            )
             root.put("models", JSONObject().put("mode", "merge").put("providers", providers))
             root.put("agents", agents)
         }

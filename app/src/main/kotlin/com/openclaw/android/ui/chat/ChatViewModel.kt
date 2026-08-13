@@ -1,0 +1,40 @@
+package com.openclaw.android.ui.chat
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.openclaw.android.model.ChatMessage
+import com.openclaw.android.model.ChatSession
+import com.openclaw.android.service.OpenClawChatClient
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class ChatViewModel @Inject constructor(
+    private val chatClient: OpenClawChatClient,
+) : ViewModel() {
+    val messages: StateFlow<List<ChatMessage>> = chatClient.messages
+    val sessions: StateFlow<List<ChatSession>> = chatClient.sessions
+    val connected: StateFlow<Boolean> = chatClient.connected
+    val status: StateFlow<String> = chatClient.status
+
+    fun start() {
+        chatClient.start()
+    }
+
+    fun stop() {
+        chatClient.stop()
+    }
+
+    fun send(text: String) {
+        viewModelScope.launch {
+            chatClient.sendMessage(text)
+        }
+    }
+
+    fun newSession() {
+        chatClient.newSession()
+    }
+}
+

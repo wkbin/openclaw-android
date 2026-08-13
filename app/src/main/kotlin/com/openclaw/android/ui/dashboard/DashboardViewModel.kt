@@ -16,6 +16,7 @@ import com.openclaw.android.util.CrashLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -29,7 +30,8 @@ class DashboardViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     val status: StateFlow<GatewayStatus> = gatewayRepository.status
-    val lastCrash: String? = CrashLogger.readLastCrash(context)
+    private val _lastCrash = MutableStateFlow(CrashLogger.readLastCrash(context))
+    val lastCrash: StateFlow<String?> = _lastCrash
     val accessUrl: StateFlow<String?> = combine(
         gatewayRepository.status,
         settingsRepository.config,
@@ -76,5 +78,10 @@ class DashboardViewModel @Inject constructor(
             .onFailure { error ->
                 Toast.makeText(context, "无法打开浏览器：${error.message}", Toast.LENGTH_LONG).show()
             }
+    }
+
+    fun dismissCrashLog() {
+        CrashLogger.clear(context)
+        _lastCrash.value = null
     }
 }

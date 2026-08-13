@@ -18,12 +18,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,10 +46,11 @@ import com.openclaw.android.model.GatewayStatus
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
+    onOpenChat: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val accessUrl by viewModel.accessUrl.collectAsStateWithLifecycle()
-    val lastCrash = viewModel.lastCrash
+    val lastCrash by viewModel.lastCrash.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val currentUrl = accessUrl
 
@@ -91,6 +95,12 @@ fun DashboardScreen(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.titleMedium,
                     )
+                    IconButton(
+                        onClick = viewModel::dismissCrashLog,
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Icon(Icons.Outlined.Close, contentDescription = "关闭")
+                    }
                     Button(
                         onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
@@ -184,6 +194,21 @@ fun DashboardScreen(
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
+            }
+        }
+
+        if (currentUrl != null) {
+            Button(
+                onClick = onOpenChat,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = null,
+                )
+                Text("进入聊天")
             }
         }
 

@@ -77,6 +77,14 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setLastVersion(version: String) = updateConfig { it.copy(lastVersion = version) }
 
+    suspend fun setThemeMode(mode: String) = updateConfig { it.copy(themeMode = mode) }
+
+    suspend fun setUiScale(scale: Float) = updateConfig { it.copy(uiScale = scale) }
+
+    suspend fun setSetupCompleted(completed: Boolean = true) = updateConfig {
+        it.copy(setupCompleted = completed)
+    }
+
     suspend fun ensureGatewayToken(): String {
         val existing = config.first().gatewayToken
         if (existing.isNotBlank()) return existing

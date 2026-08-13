@@ -3,10 +3,10 @@ package com.openclaw.android.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.List
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -20,10 +20,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.ui.chat.ChatScreen
 import com.openclaw.android.ui.dashboard.DashboardScreen
 import com.openclaw.android.ui.logs.LogsScreen
 import com.openclaw.android.ui.settings.SettingsScreen
-import com.openclaw.android.ui.update.UpdateScreen
+import com.openclaw.android.ui.setup.SetupWizardScreen
+import com.openclaw.android.ui.theme.OpenClawTheme
 
 private enum class Destination(
     val label: String,
@@ -32,39 +36,74 @@ private enum class Destination(
     Dashboard("仪表盘", Icons.Outlined.Home),
     Logs("日志", Icons.Outlined.List),
     Settings("配置", Icons.Outlined.Settings),
-    Update("升级", Icons.Outlined.Refresh),
 }
 
 @Composable
-fun AppRoot() {
+fun AppRoot(
+    viewModel: AppViewModel = hiltViewModel(),
+) {
+    val config by viewModel.config.collectAsStateWithLifecycle()
+    val darkTheme = when (config.themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
     var selected by rememberSaveable { mutableStateOf(Destination.Dashboard) }
+    var chatOpen by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                Destination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = selected == destination,
-                        onClick = { selected = destination },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
-                        label = { Text(destination.label) },
-                    )
-                }
-            }
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+    if (!config.setupCompleted) {
+        OpenClawTheme(
+            darkTheme = darkTheme,
+            uiScale = config.uiScale,
         ) {
-            when (selected) {
-                Destination.Dashboard -> DashboardScreen()
-                Destination.Logs -> LogsScreen()
-                Destination.Settings -> SettingsScreen()
-                Destination.Update -> UpdateScreen()
+            SetupWizardScreen()
+        }
+        return
+    }
+
+    if (chatOpen) {
+        OpenClawTheme(
+            darkTheme = darkTheme,
+            uiScale = config.uiScale,
+        ) {
+            ChatScreen(
+                onBack = { chatOpen = false },
+            )
+        }
+        return
+    }
+
+    OpenClawTheme(
+        darkTheme = darkTheme,
+        uiScale = config.uiScale,
+    ) {
+        Scaffold(
+            bottomBar = {
+                NavigationBar {
+                    Destination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = selected == destination,
+                            onClick = { selected = destination },
+                            icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            label = { Text(destination.label) },
+                        )
+                    }
+                }
+            },
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                when (selected) {
+                    Destination.Dashboard -> DashboardScreen(
+                        onOpenChat = { chatOpen = true },
+                    )
+                    Destination.Logs -> LogsScreen()
+                    Destination.Settings -> SettingsScreen()
+                }
             }
         }
     }
 }
-
