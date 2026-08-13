@@ -1,15 +1,17 @@
 # OpenClaw Android 内置版
 
-将 OpenClaw 打包到 Android App 的骨架工程。当前实现 Phase 1 + 升级状态机骨架，代码可通过 `assembleDebug` 编译。
+将 OpenClaw 完整打包进 Android App，在手机上运行个人 AI 网关。
 
 ## 当前能力
 
 - Compose + Hilt + DataStore 单模块 Android 工程。
-- 前台服务 `GatewayService`，管理 Node 进程启动/停止、崩溃自动重启。
-- 运行时目录准备：从 `assets/node/node` 提取 Node 二进制，从 `assets/bootstrap/openclaw-minimal.tar.gz` 提取离线 bootstrap。
-- 健康检查、内存读取、stdout/stderr 日志采集与环形缓冲区。
-- 配置页：端口、监听地址、日志级别、API Key、启动参数、开机自启。
-- 升级页：GitHub Release 检查、断点续传下载、SHA256 校验、版本目录切换与回滚状态机骨架。
+- 前台服务管理 Node 进程启动/停止、崩溃自动重启、健康检查。
+- Termux 版 Bionic Node 24 + OpenClaw 2026.7.1-2 离线内置，无需 root。
+- Setup 初始化向导：欢迎页、模型厂商配置、完成页。
+- **原生聊天**：直接连接 Gateway WebSocket，自动生成 Ed25519 设备身份、自动批准配对、会话侧边栏、气泡消息、流式回复、底部输入框。
+- 设置页分组：模型厂商与默认模型、主题与缩放、网关、检查更新、关于与支持、开发者模式（编辑 `openclaw.json`）。
+- 日志：stdout/stderr 采集、内存环形缓冲区、按天滚动文件、一键复制。
+- 升级状态机骨架：GitHub Release 检查、断点续传、SHA256 校验、版本目录切换。
 
 ## 构建
 
@@ -26,20 +28,21 @@ app/build/outputs/apk/debug/app-debug.apk
 
 > 本机是 Linux aarch64，`gradle.properties` 已配置 `android.aapt2FromMavenOverride` 指向 SDK 自带 ARM64 aapt2。x86_64 主机可删除该行。
 
-## 打包前必须补入的资源
+## 二进制资源
 
-当前已内置真实运行资源：
+大文件已用 Git LFS 管理：
 
 ```text
-app/src/main/assets/node/node-v22.23.2-linux-arm64.tar.gz    # Node v22.23.2 Linux ARM64
-app/src/main/assets/bootstrap/openclaw-minimal.tar.gz        # OpenClaw 2026.7.1-2 + production dependencies
+app/src/main/assets/bootstrap/openclaw-minimal.tar.gz
+app/src/main/assets/node-libs/node-libs.tar.gz
+app/src/main/jniLibs/arm64-v8a/libnode.so 及依赖
 ```
 
-APK 体积会明显大于空骨架，因为 Node 与 OpenClaw 依赖被打入 assets。个人自用、不上架场景可以直接构建。
+克隆后执行 `git lfs pull` 即可取得真实文件。
 
 ## 下一步
 
-1. 在 `UpdateViewModel` 中替换真实 GitHub `owner/repo`。
+1. 把 `UpdateViewModel` 中的 GitHub `owner/repo` 换成真实 Release 仓库。
 2. 实现开机自启广播接收器。
-3. 实现 `GatewayService.ACTION_APPLY_UPDATE`，把升级状态机接到前台服务重启流程。
+3. 把升级状态机接到前台服务重启流程。
 4. 补齐厂商后台保活引导与通知权限申请。

@@ -91,7 +91,7 @@ class OpenClawChatClient @Inject constructor(
             .put("message", trimmed)
             .put("deliver", false)
             .put("idempotencyKey", UUID.randomUUID().toString())
-        request("chat.send", params)
+        runCatching { request("chat.send", params) }
     }
 
     fun newSession() {
