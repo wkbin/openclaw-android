@@ -4,6 +4,7 @@ import android.content.Context
 import com.openclaw.android.model.UpdateFailureReason
 import com.openclaw.android.model.UpdateState
 import com.openclaw.android.util.FileUtil
+import com.openclaw.android.util.VersionUtil
 import com.openclaw.android.util.TarUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,10 @@ import java.io.IOException
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val DOWNLOAD_MARGIN_BYTES = 128L * 1024 * 1024
+private const val EXTRACT_MARGIN_BYTES = 128L * 1024 * 1024
+private const val EXTRACT_MIN_BYTES = 64L * 1024 * 1024
 
 @Singleton
 class UpdateRepository @Inject constructor(
@@ -59,7 +64,7 @@ class UpdateRepository @Inject constructor(
             }
 
             val latest = release.tagName.removePrefix("v")
-            if (compareVersions(latest, currentVersion) <= 0) {
+            if (VersionUtil.compare(latest, currentVersion) <= 0) {
                 available = null
                 _state.value = UpdateState.UpToDate
                 return@withLock
@@ -93,6 +98,20 @@ class UpdateRepository @Inject constructor(
         val downloadsDir = File(openclawRoot(), "downloads").apply { mkdirs() }
         val partFile = File(downloadsDir, "openclaw-v$version-android-arm64.tar.gz.part")
         val archiveFile = File(downloadsDir, "openclaw-v$version-android-arm64.tar.gz")
+
+        val spaceOk = withContext(Dispatchers.IO) {
+            FileUtil.availableBytes(downloadsDir) >= release.downloadSizeBytes + DOWNLOAD_MARGIN_BYTES
+        }
+        if (!spaceOk) {
+            _state.value = UpdateState.Failed(
+                reason = UpdateFailureReason.InsufficientSpace,
+                failedVersion = version,
+                activeVersion = activeVersion(),
+                canRetry = true,
+                message = "存储空间不足，无法下载更新",
+            )
+            return@withLock
+        }
 
         try {
             if (!archiveFile.exists()) {
@@ -153,12 +172,19 @@ class UpdateRepository @Inject constructor(
         )
 
         try {
-            withContext(Dispatchers.IO) {
+            val installed = withContext(Dispatchers.IO) {
                 val root = openclawRoot().apply { mkdirs() }
                 val versionsDir = File(root, "versions").apply { mkdirs() }
                 val backupsDir = File(root, "backups").apply { mkdirs() }
                 val temporary = File(versionsDir, "$version.tmp")
                 val target = File(versionsDir, version)
+
+                val neededBytes = (archive.length() * 3L).coerceAtLeast(EXTRACT_MIN_BYTES) +
+                    directorySize(File(versionsDir, fromVersion)) +
+                    EXTRACT_MARGIN_BYTES
+                if (FileUtil.availableBytes(versionsDir) < neededBytes) {
+                    return@withContext false
+                }
 
                 FileUtil.deleteRecursively(temporary)
                 TarUtil.extractTarGz(archive, temporary)
@@ -176,6 +202,18 @@ class UpdateRepository @Inject constructor(
 
                 FileUtil.atomicWriteText(File(root, "current-version"), version)
                 settingsRepository.setLastVersion(version)
+                true
+            }
+
+            if (!installed) {
+                _state.value = UpdateState.Failed(
+                    reason = UpdateFailureReason.InsufficientSpace,
+                    failedVersion = version,
+                    activeVersion = fromVersion,
+                    canRetry = true,
+                    message = "存储空间不足，无法安装更新",
+                )
+                return@withLock
             }
 
             pendingArchive = null
@@ -245,6 +283,12 @@ class UpdateRepository @Inject constructor(
         pendingFromVersion = null
         pendingToVersion = null
         _state.value = UpdateState.Idle
+    }
+
+    private fun directorySize(file: File): Long {
+        if (!file.exists()) return 0L
+        if (file.isFile) return file.length()
+        return file.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
     }
 
     private suspend fun activeVersion(): String {
@@ -356,18 +400,6 @@ class UpdateRepository @Inject constructor(
             }
         }
         digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun compareVersions(left: String, right: String): Int {
-        val a = left.split('.').map { it.toIntOrNull() ?: 0 }
-        val b = right.split('.').map { it.toIntOrNull() ?: 0 }
-        val size = maxOf(a.size, b.size)
-        for (index in 0 until size) {
-            val av = a.getOrElse(index) { 0 }
-            val bv = b.getOrElse(index) { 0 }
-            if (av != bv) return av.compareTo(bv)
-        }
-        return 0
     }
 
     @Serializable

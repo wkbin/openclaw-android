@@ -1,6 +1,7 @@
 package com.openclaw.android.util
 
 import android.content.Context
+import android.os.StatFs
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
@@ -31,7 +32,7 @@ object FileUtil {
     fun availableBytes(directory: File): Long {
         return try {
             directory.mkdirs()
-            Files.getFileStore(directory.toPath()).usableSpace
+            StatFs(directory.absolutePath).availableBytes
         } catch (_: Exception) {
             0L
         }

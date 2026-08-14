@@ -20,6 +20,7 @@ class ChatViewModel @Inject constructor(
     val connected: StateFlow<Boolean> = chatClient.connected
     val status: StateFlow<String> = chatClient.status
     val isStreaming: StateFlow<Boolean> = chatClient.isStreaming
+    val currentSessionKey: StateFlow<String?> = chatClient.currentSessionKey
 
     fun start() {
         chatClient.start()

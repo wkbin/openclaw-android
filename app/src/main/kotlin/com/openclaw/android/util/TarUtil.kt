@@ -42,6 +42,29 @@ object TarUtil {
         }
     }
 
+    /**
+     * 自动识别 tar / tar.gz 并解压。
+     * 注：AGP 打包 assets 时会自动把 `.gz` 资源解压并去掉后缀，
+     * 因此运行时的 asset 可能是纯 tar，也可能是 tar.gz，这里按魔数探测。
+     */
+    fun extractAuto(
+        archive: File,
+        destination: File,
+    ) {
+        val isGzip = runCatching {
+            FileInputStream(archive).use { input ->
+                val b1 = input.read()
+                val b2 = input.read()
+                b1 == 0x1f && b2 == 0x8b
+            }
+        }.getOrDefault(false)
+        if (isGzip) {
+            extractTarGz(archive, destination)
+        } else {
+            extractTar(archive, destination)
+        }
+    }
+
     private fun extractEntries(
         tar: TarArchiveInputStream,
         destination: File,
@@ -95,6 +118,9 @@ object TarUtil {
             var targetName = pending.targetName.replace('\\', '/').trimStart('/')
             while (targetName.startsWith("./")) {
                 targetName = targetName.substring(2)
+            }
+            if (targetName.split('/').any { it == ".." }) {
+                throw SecurityException("Archive link target escapes destination: ${pending.targetName}")
             }
             val target = File(destination, targetName).canonicalFile
             pending.output.parentFile?.mkdirs()

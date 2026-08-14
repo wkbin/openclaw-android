@@ -1,17 +1,20 @@
 package com.openclaw.android.repository
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.openclaw.android.model.ApiKeys
 import com.openclaw.android.model.GatewayConfig
+import com.openclaw.android.util.KeystoreCrypto
 import dagger.hilt.android.qualifiers.ApplicationContext
-import android.content.Context
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.security.SecureRandom
@@ -25,6 +28,7 @@ class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val configKey = stringPreferencesKey("gateway_config")
+    private val cryptoAlias = "openclaw_config_aes"
 
     val config: Flow<GatewayConfig> = dataStore.data
         .catch { throwable ->
@@ -35,23 +39,13 @@ class SettingsRepository @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[configKey]
-                ?.let { stored ->
-                    runCatching { json.decodeFromString<GatewayConfig>(stored) }
-                        .getOrDefault(GatewayConfig())
-                }
-                ?: GatewayConfig()
+            decodeStored(preferences[configKey])
         }
 
     suspend fun updateConfig(transform: (GatewayConfig) -> GatewayConfig) {
         dataStore.edit { preferences ->
-            val current = preferences[configKey]
-                ?.let { stored ->
-                    runCatching { json.decodeFromString<GatewayConfig>(stored) }
-                        .getOrDefault(GatewayConfig())
-                }
-                ?: GatewayConfig()
-            preferences[configKey] = json.encodeToString(GatewayConfig.serializer(), transform(current))
+            val current = decodeStored(preferences[configKey])
+            preferences[configKey] = encodeStored(transform(current))
         }
     }
 
@@ -94,4 +88,98 @@ class SettingsRepository @Inject constructor(
         updateConfig { it.copy(gatewayToken = token) }
         return token
     }
+
+    private fun decodeStored(stored: String?): GatewayConfig {
+        if (stored.isNullOrBlank()) return GatewayConfig()
+        val dto = runCatching { json.decodeFromString<StoredGatewayConfig>(stored) }.getOrNull()
+        if (dto != null) {
+            // 识别为加密格式；版本不匹配时不解析，避免静默得到错误数据
+            return if (dto.version == STORAGE_VERSION) dto.toGatewayConfig() else GatewayConfig()
+        }
+        // 旧版明文配置：直接读取，下次写入时自动迁移为加密存储
+        return runCatching { json.decodeFromString<GatewayConfig>(stored) }
+            .getOrDefault(GatewayConfig())
+    }
+
+    private fun encodeStored(config: GatewayConfig): String {
+        val dto = StoredGatewayConfig(
+            version = STORAGE_VERSION,
+            port = config.port,
+            host = config.host,
+            autoStart = config.autoStart,
+            logLevel = config.logLevel,
+            apiKeysEnc = KeystoreCrypto.encryptString(
+                cryptoAlias,
+                json.encodeToString(ApiKeys.serializer(), config.apiKeys),
+            ),
+            startupArgs = config.startupArgs,
+            lastVersion = config.lastVersion,
+            gatewayTokenEnc = if (config.gatewayToken.isNotBlank()) {
+                KeystoreCrypto.encryptString(cryptoAlias, config.gatewayToken)
+            } else {
+                ""
+            },
+            themeMode = config.themeMode,
+            uiScale = config.uiScale,
+            setupCompleted = config.setupCompleted,
+            defaultModel = config.defaultModel,
+            githubOwner = config.githubOwner,
+            githubRepo = config.githubRepo,
+        )
+        return json.encodeToString(StoredGatewayConfig.serializer(), dto)
+    }
+
+    private fun StoredGatewayConfig.toGatewayConfig(): GatewayConfig {
+        val apiKeys = if (apiKeysEnc.isNotBlank()) {
+            runCatching {
+                json.decodeFromString<ApiKeys>(KeystoreCrypto.decryptString(cryptoAlias, apiKeysEnc))
+            }.getOrDefault(ApiKeys())
+        } else {
+            ApiKeys()
+        }
+        val token = if (gatewayTokenEnc.isNotBlank()) {
+            runCatching { KeystoreCrypto.decryptString(cryptoAlias, gatewayTokenEnc) }.getOrDefault("")
+        } else {
+            ""
+        }
+        return GatewayConfig(
+            port = port,
+            host = host,
+            autoStart = autoStart,
+            logLevel = logLevel,
+            apiKeys = apiKeys,
+            startupArgs = startupArgs,
+            lastVersion = lastVersion,
+            gatewayToken = token,
+            themeMode = themeMode,
+            uiScale = uiScale,
+            setupCompleted = setupCompleted,
+            defaultModel = defaultModel,
+            githubOwner = githubOwner,
+            githubRepo = githubRepo,
+        )
+    }
+
+    companion object {
+        private const val STORAGE_VERSION = 2
+    }
 }
+
+@Serializable
+private data class StoredGatewayConfig(
+    val version: Int,
+    val port: Int = 3000,
+    val host: String = "127.0.0.1",
+    val autoStart: Boolean = false,
+    val logLevel: String = "info",
+    val apiKeysEnc: String = "",
+    val startupArgs: List<String> = emptyList(),
+    val lastVersion: String = "bootstrap",
+    val gatewayTokenEnc: String = "",
+    val themeMode: String = "system",
+    val uiScale: Float = 1f,
+    val setupCompleted: Boolean = false,
+    val defaultModel: String = "deepseek/deepseek-v4-flash",
+    val githubOwner: String = "openclaw",
+    val githubRepo: String = "openclaw",
+)

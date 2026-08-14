@@ -4,10 +4,14 @@ import android.widget.Toast
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,11 +20,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.LogEntry
 import com.openclaw.android.model.LogLevel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen(
     viewModel: LogsViewModel = hiltViewModel(),
@@ -55,87 +63,97 @@ fun LogsScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "实时日志",
-                style = MaterialTheme.typography.headlineSmall,
+    Scaffold(
+        contentWindowInsets = WindowInsets.statusBars,
+        topBar = {
+            TopAppBar(
+                title = { Text("日志") },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val text = logs.joinToString("\n") { entry ->
+                                "${entry.isoTime} [${entry.level.name}] ${entry.message}"
+                            }
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard.setPrimaryClip(ClipData.newPlainText("OpenClaw logs", text))
+                            Toast.makeText(context, "已复制全部日志", Toast.LENGTH_LONG).show()
+                        },
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = "复制日志")
+                    }
+                    IconButton(
+                        onClick = {
+                            viewModel.clearMemory()
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "清空内存日志")
+                    }
+                    IconButton(
+                        onClick = {
+                            viewModel.export { file ->
+                                Toast.makeText(
+                                    context,
+                                    "日志已导出：${file.absolutePath}",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Share, contentDescription = "导出日志")
+                    }
+                },
             )
-            Row {
-                IconButton(
-                    onClick = {
-                        val text = logs.joinToString("\n") { entry ->
-                            "${entry.isoTime} [${entry.level.name}] ${entry.message}"
-                        }
-                        val clipboard = context.getSystemService(ClipboardManager::class.java)
-                        clipboard.setPrimaryClip(ClipData.newPlainText("OpenClaw logs", text))
-                        Toast.makeText(context, "已复制全部日志", Toast.LENGTH_LONG).show()
-                    },
-                ) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = "复制日志")
-                }
-                IconButton(
-                    onClick = {
-                        viewModel.clearMemory()
-                    },
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "清空内存日志")
-                }
-                IconButton(
-                    onClick = {
-                        viewModel.export { file ->
-                            Toast.makeText(context, "日志已导出：${file.absolutePath}", Toast.LENGTH_LONG).show()
-                        }
-                    },
-                ) {
-                    Icon(Icons.Outlined.Share, contentDescription = "导出日志")
-                }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedLevel == null,
+                    onClick = { selectedLevel = null },
+                    label = { Text("全部") },
+                )
+                FilterChip(
+                    selected = selectedLevel == LogLevel.Info,
+                    onClick = { selectedLevel = LogLevel.Info },
+                    label = { Text("INFO") },
+                )
+                FilterChip(
+                    selected = selectedLevel == LogLevel.Debug,
+                    onClick = { selectedLevel = LogLevel.Debug },
+                    label = { Text("DEBUG") },
+                )
+                FilterChip(
+                    selected = selectedLevel == LogLevel.Error,
+                    onClick = { selectedLevel = LogLevel.Error },
+                    label = { Text("ERROR") },
+                )
+                FilterChip(
+                    selected = autoScroll,
+                    onClick = { autoScroll = !autoScroll },
+                    label = { Text(if (autoScroll) "自动滚动" else "已暂停") },
+                )
             }
-        }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = selectedLevel == null,
-                onClick = { selectedLevel = null },
-                label = { Text("全部") },
-            )
-            FilterChip(
-                selected = selectedLevel == LogLevel.Info,
-                onClick = { selectedLevel = LogLevel.Info },
-                label = { Text("INFO") },
-            )
-            FilterChip(
-                selected = selectedLevel == LogLevel.Debug,
-                onClick = { selectedLevel = LogLevel.Debug },
-                label = { Text("DEBUG") },
-            )
-            FilterChip(
-                selected = selectedLevel == LogLevel.Error,
-                onClick = { selectedLevel = LogLevel.Error },
-                label = { Text("ERROR") },
-            )
-            FilterChip(
-                selected = autoScroll,
-                onClick = { autoScroll = !autoScroll },
-                label = { Text(if (autoScroll) "自动滚动" else "已暂停") },
-            )
-        }
+            Spacer(Modifier.height(4.dp))
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(filtered, key = { it.timestampEpochMillis.toString() + it.source + it.message.hashCode() }) { entry ->
-                LogRow(entry)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+            ) {
+                items(filtered, key = { it.timestampEpochMillis.toString() + it.source + it.message.hashCode() }) { entry ->
+                    LogRow(entry)
+                }
             }
         }
     }

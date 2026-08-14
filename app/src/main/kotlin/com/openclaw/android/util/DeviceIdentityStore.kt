@@ -15,13 +15,20 @@ import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
 
+/**
+ * 设备身份信息。私钥不再明文存储，而是经 AES-GCM 加密后保存为 `privateKeyEncryptedBase64`。
+ * 密文格式为 Base64(IV(12B) + ciphertext)，加解密密钥保存在 AndroidKeyStore 中。
+ * 若 KeyStore 密钥丢失，将重新生成设备身份。
+ */
 data class DeviceIdentity(
     val deviceId: String,
     val publicKeyRawBase64: String,
-    val privateKeyPkcs8Base64: String,
+    val privateKeyEncryptedBase64: String,
 )
 
 object DeviceIdentityStore {
+    private const val KEYSTORE_ALIAS = "openclaw_device_identity_aes"
+
     @Synchronized
     fun loadOrCreate(context: Context): DeviceIdentity {
         val file = identityFile(context)
@@ -29,21 +36,43 @@ object DeviceIdentityStore {
         if (file.exists()) {
             runCatching {
                 val json = JSONObject(file.readText())
-                val existing = DeviceIdentity(
-                    deviceId = json.getString("deviceId"),
-                    publicKeyRawBase64 = json.getString("publicKeyRawBase64"),
-                    privateKeyPkcs8Base64 = json.getString("privateKeyPkcs8Base64"),
-                )
-                if (existing.deviceId.isNotBlank()) return existing
+                val encrypted = json.optString("privateKeyEncryptedBase64")
+                if (encrypted.isNotBlank()) {
+                    val existing = DeviceIdentity(
+                        deviceId = json.getString("deviceId"),
+                        publicKeyRawBase64 = json.getString("publicKeyRawBase64"),
+                        privateKeyEncryptedBase64 = encrypted,
+                    )
+                    // 校验能否用当前 KeyStore 密钥解密；KeyStore 密钥丢失时解密失败，需重新生成
+                    if (existing.deviceId.isNotBlank() && canDecrypt(existing)) {
+                        return existing
+                    }
+                } else {
+                    // 兼容旧版本：读取明文 privateKeyPkcs8Base64，迁移为加密存储
+                    val legacyPlain = json.optString("privateKeyPkcs8Base64")
+                    if (legacyPlain.isNotBlank()) {
+                        val migrated = DeviceIdentity(
+                            deviceId = json.getString("deviceId"),
+                            publicKeyRawBase64 = json.getString("publicKeyRawBase64"),
+                            privateKeyEncryptedBase64 = KeystoreCrypto.encrypt(
+                                KEYSTORE_ALIAS,
+                                Base64.decode(legacyPlain, Base64.DEFAULT),
+                            ),
+                        )
+                        writeIdentity(file, migrated)
+                        return migrated
+                    }
+                }
             }
         }
         val fresh = generate()
-        val json = JSONObject()
-            .put("deviceId", fresh.deviceId)
-            .put("publicKeyRawBase64", fresh.publicKeyRawBase64)
-            .put("privateKeyPkcs8Base64", fresh.privateKeyPkcs8Base64)
-        file.writeText(json.toString())
-        return fresh
+        val identity = DeviceIdentity(
+            deviceId = fresh.deviceId,
+            publicKeyRawBase64 = fresh.publicKeyRawBase64,
+            privateKeyEncryptedBase64 = KeystoreCrypto.encrypt(KEYSTORE_ALIAS, fresh.pkcs8),
+        )
+        writeIdentity(file, identity)
+        return identity
     }
 
     fun signPayload(
@@ -51,7 +80,7 @@ object DeviceIdentityStore {
         identity: DeviceIdentity,
     ): String? {
         return runCatching {
-            val privateKeyBytes = Base64.decode(identity.privateKeyPkcs8Base64, Base64.DEFAULT)
+            val privateKeyBytes = KeystoreCrypto.decrypt(KEYSTORE_ALIAS, identity.privateKeyEncryptedBase64)
             val pkInfo = PrivateKeyInfo.getInstance(privateKeyBytes)
             val parsed = pkInfo.parsePrivateKey()
             val rawPrivate = DEROctetString.getInstance(parsed).octets
@@ -71,7 +100,27 @@ object DeviceIdentityStore {
         }.getOrNull()
     }
 
-    private fun generate(): DeviceIdentity {
+    private fun canDecrypt(identity: DeviceIdentity): Boolean {
+        return runCatching {
+            KeystoreCrypto.decrypt(KEYSTORE_ALIAS, identity.privateKeyEncryptedBase64)
+        }.isSuccess
+    }
+
+    private fun writeIdentity(file: File, identity: DeviceIdentity) {
+        val json = JSONObject()
+            .put("deviceId", identity.deviceId)
+            .put("publicKeyRawBase64", identity.publicKeyRawBase64)
+            .put("privateKeyEncryptedBase64", identity.privateKeyEncryptedBase64)
+        file.writeText(json.toString())
+    }
+
+    private data class GeneratedIdentity(
+        val deviceId: String,
+        val publicKeyRawBase64: String,
+        val pkcs8: ByteArray,
+    )
+
+    private fun generate(): GeneratedIdentity {
         val generator = Ed25519KeyPairGenerator()
         generator.init(Ed25519KeyGenerationParameters(SecureRandom()))
         val keyPair = generator.generateKeyPair()
@@ -80,10 +129,10 @@ object DeviceIdentityStore {
         val rawPublic = pubKey.encoded
         val deviceId = sha256Hex(rawPublic)
         val pkcs8 = PrivateKeyInfoFactory.createPrivateKeyInfo(privKey).encoded
-        return DeviceIdentity(
+        return GeneratedIdentity(
             deviceId = deviceId,
             publicKeyRawBase64 = Base64.encodeToString(rawPublic, Base64.NO_WRAP),
-            privateKeyPkcs8Base64 = Base64.encodeToString(pkcs8, Base64.NO_WRAP),
+            pkcs8 = pkcs8,
         )
     }
 
@@ -102,4 +151,3 @@ object DeviceIdentityStore {
     private fun identityFile(context: Context): File =
         File(context.filesDir, "openclaw/identity/device.json")
 }
-

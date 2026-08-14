@@ -8,6 +8,12 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// 从 assets/version.json 读取内置 OpenClaw 网关版本，供 BuildConfig 暴露与版本联动。
+val openclawVersion = runCatching {
+    val json = project.file("src/main/assets/version.json").readText()
+    Regex("\"openclaw\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.get(1)
+}.getOrNull() ?: "unknown"
+
 android {
     namespace = "com.openclaw.android"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -16,18 +22,24 @@ android {
         applicationId = "com.openclaw.android"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = (project.findProperty("VERSION_CODE") as String? ?: "1").toInt()
+        versionName = project.findProperty("VERSION_NAME") as String? ?: "0.1.0"
+        buildConfigField("String", "OPENCLAW_VERSION", "\"$openclawVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        ndk {
+            // 仅打包 arm64-v8a（当前唯一内置 ABI），避免 APK 体积膨胀
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

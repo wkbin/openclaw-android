@@ -36,6 +36,11 @@ fun OpenClawTheme(
             onSurfaceVariant = Color(0xFF8F8E85),
             outline = Color(0xFF2A2A26),
             outlineVariant = Color(0x22E8E6DC),
+            surfaceContainerLowest = Color(0xFF11110F),
+            surfaceContainerLow = Color(0xFF1A1A18),
+            surfaceContainer = Color(0xFF1E1E1C),
+            surfaceContainerHigh = Color(0xFF292927),
+            surfaceContainerHighest = Color(0xFF343432),
         )
     } else {
         lightColorScheme(
@@ -54,6 +59,11 @@ fun OpenClawTheme(
             onSurfaceVariant = Color(0xFF86857B),
             outline = Color(0xFFE6E4DC),
             outlineVariant = Color(0x141A1A17),
+            surfaceContainerLowest = Color(0xFFFFFFFF),
+            surfaceContainerLow = Color(0xFFF7F7F3),
+            surfaceContainer = Color(0xFFF4F4EF),
+            surfaceContainerHigh = Color(0xFFEEEEE8),
+            surfaceContainerHighest = Color(0xFFE8E8E1),
         )
     }
     val baseDensity = LocalDensity.current

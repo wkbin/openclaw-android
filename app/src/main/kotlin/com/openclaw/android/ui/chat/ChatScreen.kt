@@ -1,8 +1,12 @@
 package com.openclaw.android.ui.chat
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -26,12 +30,16 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,13 +64,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.ChatMessage
 import com.openclaw.android.model.ChatAttachment
+import com.openclaw.android.model.ChatContentPart
+import com.openclaw.android.model.ChatSession
+import com.openclaw.android.model.ToolCallState
+import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,8 +105,10 @@ fun ChatScreen(
     val connected by viewModel.connected.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
+    val currentSessionKey by viewModel.currentSessionKey.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by remember { mutableStateOf("") }
+    var pendingAttachment by remember { mutableStateOf<ChatAttachment?>(null) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -84,39 +116,40 @@ fun ChatScreen(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri != null) {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes != null) {
-                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                val fileName = "image-${System.currentTimeMillis()}.${mimeType.substringAfter('/')}"
-                val attachment = ChatAttachment(
-                    type = "image",
-                    mimeType = mimeType,
-                    fileName = fileName,
-                    base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
-                )
-                val text = input.trim()
-                viewModel.send(text, attachment)
-                input = ""
+            scope.launch(Dispatchers.IO) {
+                val attachment = loadImageAttachment(context, uri)
+                withContext(Dispatchers.Main) {
+                    if (attachment != null) {
+                        pendingAttachment = attachment
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "图片过大或读取失败（限制 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
             }
         }
     }
+
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         if (uri != null) {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes != null) {
-                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                val fileName = queryDisplayName(context, uri) ?: "file-${System.currentTimeMillis()}"
-                val attachment = ChatAttachment(
-                    type = "file",
-                    mimeType = mimeType,
-                    fileName = fileName,
-                    base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
-                )
-                val text = input.trim()
-                viewModel.send(text, attachment)
-                input = ""
+            scope.launch(Dispatchers.IO) {
+                val attachment = loadFileAttachment(context, uri)
+                withContext(Dispatchers.Main) {
+                    if (attachment != null) {
+                        pendingAttachment = attachment
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "文件过大或读取失败（限制 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
             }
         }
     }
@@ -170,16 +203,15 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(sessions, key = { it.key }) { session ->
-                        Text(
-                            text = session.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.selectSession(session.key)
-                                    scope.launch { drawerState.close() }
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        SessionRow(
+                            session = session,
+                            isCurrent = session.key == currentSessionKey,
+                            showSpinner = session.hasActiveRun ||
+                                (isStreaming && session.key == currentSessionKey),
+                            onClick = {
+                                viewModel.selectSession(session.key)
+                                scope.launch { drawerState.close() }
+                            },
                         )
                     }
                 }
@@ -203,60 +235,72 @@ fun ChatScreen(
                 )
             },
             bottomBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = { input = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("输入消息…") },
-                        enabled = connected,
-                    )
-                    if (isStreaming) {
-                        IconButton(
-                            onClick = viewModel::stopGeneration,
+                    pendingAttachment?.let { attachment ->
+                        AttachmentPreviewBar(
+                            attachment = attachment,
+                            onRemove = { pendingAttachment = null },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { input = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("输入消息…") },
                             enabled = connected,
-                        ) {
-                            Icon(Icons.Outlined.Stop, contentDescription = "停止生成")
+                        )
+                        if (isStreaming) {
+                            IconButton(
+                                onClick = viewModel::stopGeneration,
+                                enabled = connected,
+                            ) {
+                                Icon(Icons.Outlined.Stop, contentDescription = "停止生成")
+                            }
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    val text = input.trim()
+                                    val attachment = pendingAttachment
+                                    if (text.isNotEmpty() || attachment != null) {
+                                        viewModel.send(text, attachment)
+                                        input = ""
+                                        pendingAttachment = null
+                                    }
+                                },
+                                enabled = connected,
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                            }
                         }
-                    } else {
                         IconButton(
                             onClick = {
-                                val text = input.trim()
-                                if (text.isNotEmpty()) {
-                                    viewModel.send(text)
-                                    input = ""
-                                }
+                                imagePicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                    ),
+                                )
                             },
                             enabled = connected,
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                            Icon(Icons.Outlined.Image, contentDescription = "发送图片")
                         }
-                    }
-                    IconButton(
-                        onClick = {
-                            imagePicker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
-                        },
-                        enabled = connected,
-                    ) {
-                        Icon(Icons.Outlined.Image, contentDescription = "发送图片")
-                    }
-                    IconButton(
-                        onClick = {
-                            filePicker.launch("*/*")
-                        },
-                        enabled = connected,
-                    ) {
-                        Icon(Icons.Outlined.AttachFile, contentDescription = "发送文件")
+                        IconButton(
+                            onClick = {
+                                filePicker.launch("*/*")
+                            },
+                            enabled = connected,
+                        ) {
+                            Icon(Icons.Outlined.AttachFile, contentDescription = "发送文件")
+                        }
                     }
                 }
             },
@@ -295,7 +339,7 @@ fun ChatScreen(
 }
 
 private fun queryDisplayName(
-    context: android.content.Context,
+    context: Context,
     uri: Uri,
 ): String? {
     return runCatching {
@@ -310,9 +354,269 @@ private fun queryDisplayName(
     }.getOrNull()
 }
 
+private const val MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+
+private fun loadImageAttachment(
+    context: Context,
+    uri: Uri,
+): ChatAttachment? {
+    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+    val fileName = "image-${System.currentTimeMillis()}.${mimeType.substringAfter('/')}"
+    return runCatching {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: return@runCatching null
+        if (bytes.size > MAX_ATTACHMENT_BYTES) return@runCatching null
+        val compressed = compressImage(context, uri, bytes)
+        val didCompress = compressed.size < bytes.size
+        val finalBytes = if (didCompress) compressed else bytes
+        ChatAttachment(
+            type = "image",
+            mimeType = if (didCompress) "image/jpeg" else mimeType,
+            fileName = if (didCompress) "image-${System.currentTimeMillis()}.jpg" else fileName,
+            base64 = Base64.encodeToString(finalBytes, Base64.NO_WRAP),
+        )
+    }.getOrNull()
+}
+
+private fun compressImage(
+    context: Context,
+    uri: Uri,
+    original: ByteArray,
+): ByteArray {
+    return try {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, options)
+        }
+        var sample = 1
+        while (options.outWidth / sample > 2048 || options.outHeight / sample > 2048) {
+            sample *= 2
+        }
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, decodeOptions)
+        } ?: return original
+        val stream = ByteArrayOutputStream()
+        val quality = if (original.size > 2 * 1024 * 1024) 80 else 90
+        val ok = bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+        bitmap.recycle()
+        if (ok) stream.toByteArray() else original
+    } catch (_: Exception) {
+        original
+    }
+}
+
+private fun loadFileAttachment(
+    context: Context,
+    uri: Uri,
+): ChatAttachment? {
+    val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+    val fileName = queryDisplayName(context, uri) ?: "file-${System.currentTimeMillis()}"
+    return runCatching {
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: return@runCatching null
+        if (bytes.size > MAX_ATTACHMENT_BYTES) return@runCatching null
+        ChatAttachment(
+            type = "file",
+            mimeType = mimeType,
+            fileName = fileName,
+            base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
+        )
+    }.getOrNull()
+}
+
+@Composable
+private fun AttachmentPreviewBar(
+    attachment: ChatAttachment,
+    onRemove: () -> Unit,
+) {
+    val thumbnail by produceState<Bitmap?>(initialValue = null, attachment.base64) {
+        value = withContext(Dispatchers.Default) {
+            runCatching {
+                decodePreviewBitmap(
+                    Base64.decode(attachment.base64, Base64.NO_WRAP),
+                    maxSize = 192,
+                )
+            }.getOrNull()
+        }
+    }
+    val thumb = thumbnail
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (attachment.type == "image") {
+                if (thumb != null) {
+                    Image(
+                        bitmap = thumb.asImageBitmap(),
+                        contentDescription = attachment.fileName,
+                        modifier = Modifier
+                            .size(width = 48.dp, height = 48.dp)
+                            .clip(MaterialTheme.shapes.small),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Outlined.Image, contentDescription = null)
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.AttachFile,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = attachment.fileName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (attachment.type == "image") "图片已就绪，点击发送即可发送" else "文件已就绪，点击发送即可发送",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Close, contentDescription = "移除附件")
+            }
+        }
+    }
+}
+
+private fun decodePreviewBitmap(
+    bytes: ByteArray,
+    maxSize: Int,
+): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (bounds.outWidth / sample > maxSize || bounds.outHeight / sample > maxSize) {
+        sample *= 2
+    }
+    val options = BitmapFactory.Options().apply { inSampleSize = sample }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+}
+
+@Composable
+private fun SessionRow(
+    session: ChatSession,
+    isCurrent: Boolean,
+    showSpinner: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = if (isCurrent) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            Color.Transparent
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(8.dp),
+            ) {
+                if (session.unread) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = CircleShape,
+                            ),
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+            ) {
+                Text(
+                    text = session.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                session.lastMessage?.takeIf { it.isNotBlank() }?.let { preview ->
+                    Text(
+                        text = preview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Text(
+                text = formatRelativeTime(session.updatedAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            if (showSpinner) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(12.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+    }
+}
+
+private fun formatRelativeTime(epochMillis: Long?): String {
+    if (epochMillis == null || epochMillis <= 0L) return ""
+    val diffMin = (System.currentTimeMillis() - epochMillis) / 60_000L
+    return when {
+        diffMin < 1 -> "刚刚"
+        diffMin < 60 -> "${diffMin}分钟前"
+        diffMin < 24 * 60 -> "${diffMin / 60}小时前"
+        diffMin < 48 * 60 -> "昨天"
+        else -> SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(epochMillis))
+    }
+}
+
 @Composable
 private fun MessageBubble(message: ChatMessage) {
     val isUser = message.role == "user"
+    var expandedToolIds by remember { mutableStateOf(setOf<String>()) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -333,34 +637,172 @@ private fun MessageBubble(message: ChatMessage) {
                 },
             ),
         ) {
-            val parts = message.text.split("```")
             Column(
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                parts.forEachIndexed { index, part ->
-                    if (part.isBlank()) return@forEachIndexed
-                    if (index % 2 == 1) {
-                        Text(
-                            text = part.trim('\n'),
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                    androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                                )
-                                .padding(10.dp),
+                if (message.parts.isEmpty()) {
+                    MessageTextContent(message.text)
+                } else {
+                    message.parts.forEach { part ->
+                        when (part) {
+                            is ChatContentPart.Text -> MessageTextContent(part.text)
+                            is ChatContentPart.Reasoning -> Text(
+                                text = part.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            is ChatContentPart.ToolCall -> ToolCallCard(
+                                toolCall = part,
+                                expanded = part.toolCallId in expandedToolIds,
+                                onToggle = {
+                                    expandedToolIds = if (part.toolCallId in expandedToolIds) {
+                                        expandedToolIds - part.toolCallId
+                                    } else {
+                                        expandedToolIds + part.toolCallId
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = formatMessageTime(message.timestampEpochMillis),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.align(if (isUser) Alignment.End else Alignment.Start),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageTextContent(text: String) {
+    MarkdownText(text = text)
+}
+
+private fun formatMessageTime(epochMillis: Long): String {
+    val cal = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    val now = Calendar.getInstance()
+    val sameDay = cal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+        cal.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+    return if (sameDay) {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochMillis))
+    } else {
+        SimpleDateFormat("M月d日 HH:mm", Locale.getDefault()).format(Date(epochMillis))
+    }
+}
+
+@Composable
+private fun ToolCallCard(
+    toolCall: ChatContentPart.ToolCall,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        shape = MaterialTheme.shapes.medium,
+        color = when (toolCall.state) {
+            ToolCallState.Failed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Build,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = toolCall.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                when (toolCall.state) {
+                    ToolCallState.Running -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
                         )
-                    } else {
                         Text(
-                            text = part.trim(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Start,
+                            text = "调用中",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    ToolCallState.Succeeded -> {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "完成",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    ToolCallState.Failed -> {
+                        Icon(
+                            Icons.Outlined.Cancel,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "失败",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
+            }
+            if (toolCall.arguments.isNotBlank()) {
+                val args = toolCall.arguments
+                val preview = if (expanded || args.length <= 160) args else args.take(160) + "…"
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (expanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            toolCall.result?.takeIf { it.isNotBlank() }?.let { result ->
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                val preview = if (expanded || result.length <= 200) result else result.take(200) + "…"
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (toolCall.state == ToolCallState.Failed) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = if (expanded) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
