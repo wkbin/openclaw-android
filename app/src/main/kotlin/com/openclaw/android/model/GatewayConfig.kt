@@ -25,5 +25,33 @@ data class ApiKeys(
     val openai: String = "",
     val anthropic: String = "",
     val deepseek: String = "",
+    val qwen: String = "",
+    val kimi: String = "",
+    val stepfun: String = "",
+    val mimo: String = "",
     val custom: Map<String, String> = emptyMap(),
 )
+
+/** 取某厂商的 API Key，内置厂商读固定字段，其余读自定义表。GatewayService 与 ProcessManager 共用。 */
+fun ApiKeys.apiKeyFor(providerId: String): String = when (providerId) {
+    "openai" -> openai
+    "anthropic" -> anthropic
+    "deepseek" -> deepseek
+    "qwen" -> qwen
+    "kimi" -> kimi
+    "stepfun" -> stepfun
+    "mimo" -> mimo
+    else -> custom[providerId].orEmpty()
+}
+
+/** 厂商对应的环境变量名，用于注入进程环境与 openclaw.json 的 ${VAR} 引用。 */
+fun envVarFor(providerId: String): String = when (providerId) {
+    "openai" -> "OPENAI_API_KEY"
+    "anthropic" -> "ANTHROPIC_API_KEY"
+    "deepseek" -> "DEEPSEEK_API_KEY"
+    "qwen" -> "QWEN_API_KEY"
+    "kimi" -> "KIMI_API_KEY"
+    "stepfun" -> "STEPFUN_API_KEY"
+    "mimo" -> "MIMO_API_KEY"
+    else -> "${providerId.uppercase().replace('-', '_')}_API_KEY"
+}

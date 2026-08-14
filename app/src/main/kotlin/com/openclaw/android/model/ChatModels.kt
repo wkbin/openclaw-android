@@ -6,6 +6,13 @@ enum class ToolCallState {
     Failed,
 }
 
+/** 用户消息的发送状态：Sending=已入队等待回执，Sent=发送成功，Failed=发送失败（可重试）。 */
+enum class ChatSendState {
+    Sending,
+    Sent,
+    Failed,
+}
+
 sealed class ChatContentPart {
     data class Text(val text: String) : ChatContentPart()
 
@@ -26,6 +33,8 @@ data class ChatMessage(
     val text: String,
     val parts: List<ChatContentPart> = emptyList(),
     val timestampEpochMillis: Long,
+    val sendState: ChatSendState = ChatSendState.Sent,
+    val sendError: String? = null,
 )
 
 data class ChatSession(

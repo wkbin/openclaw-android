@@ -72,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.ChatMessage
 import com.openclaw.android.model.ChatAttachment
 import com.openclaw.android.model.ChatContentPart
+import com.openclaw.android.model.ChatSendState
 import com.openclaw.android.model.ChatSession
 import com.openclaw.android.model.ToolCallState
 import java.io.ByteArrayOutputStream
@@ -106,12 +107,17 @@ fun ChatScreen(
     val status by viewModel.status.collectAsStateWithLifecycle()
     val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
     val currentSessionKey by viewModel.currentSessionKey.collectAsStateWithLifecycle()
+    val hasOlderMessages by viewModel.hasOlderMessages.collectAsStateWithLifecycle()
+    val loadingOlder by viewModel.loadingOlder.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<ChatAttachment?>(null) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // "加载更早消息"时记录滚动锚点，前插后恢复到对应位置，避免被自动滚到底
+    var olderScrollAnchor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var olderScrollBaseSize by remember { mutableStateOf(0) }
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
@@ -162,6 +168,15 @@ fun ChatScreen(
     }
 
     LaunchedEffect(messages.size) {
+        val anchor = olderScrollAnchor
+        if (anchor != null) {
+            val prepended = messages.size - olderScrollBaseSize
+            olderScrollAnchor = null
+            if (prepended > 0) {
+                listState.scrollToItem(anchor.first + prepended, anchor.second)
+                return@LaunchedEffect
+            }
+        }
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -329,8 +344,38 @@ fun ChatScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    if (hasOlderMessages) {
+                        item(key = "load-older") {
+                            OutlinedButton(
+                                onClick = {
+                                    olderScrollAnchor = listState.firstVisibleItemIndex to
+                                        listState.firstVisibleItemScrollOffset
+                                    olderScrollBaseSize = messages.size
+                                    viewModel.loadOlderMessages()
+                                },
+                                enabled = !loadingOlder,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                if (loadingOlder) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                    Text(
+                                        text = "加载中…",
+                                        modifier = Modifier.padding(start = 6.dp),
+                                    )
+                                } else {
+                                    Text("加载更早消息")
+                                }
+                            }
+                        }
+                    }
                     items(messages, key = { it.id }) { message ->
-                        MessageBubble(message)
+                        MessageBubble(
+                            message = message,
+                            onRetry = { viewModel.retryMessage(message.id) },
+                        )
                     }
                 }
             }
@@ -614,7 +659,10 @@ private fun formatRelativeTime(epochMillis: Long?): String {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+private fun MessageBubble(
+    message: ChatMessage,
+    onRetry: (String) -> Unit,
+) {
     val isUser = message.role == "user"
     var expandedToolIds by remember { mutableStateOf(setOf<String>()) }
     Row(
@@ -630,10 +678,13 @@ private fun MessageBubble(message: ChatMessage) {
                 bottomEnd = if (isUser) 4.dp else 18.dp,
             ),
             colors = CardDefaults.cardColors(
-                containerColor = if (isUser) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainer
+                containerColor = when {
+                    isUser && message.sendState == ChatSendState.Failed ->
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                    isUser ->
+                        MaterialTheme.colorScheme.primaryContainer
+                    else ->
+                        MaterialTheme.colorScheme.surfaceContainer
                 },
             ),
         ) {
@@ -664,6 +715,35 @@ private fun MessageBubble(message: ChatMessage) {
                                     }
                                 },
                             )
+                        }
+                    }
+                }
+                if (isUser && message.sendState == ChatSendState.Failed) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = message.sendError?.let { "发送失败：$it" } ?: "发送失败",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedButton(
+                            onClick = { onRetry(message.id) },
+                            enabled = message.sendState == ChatSendState.Failed,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                horizontal = 12.dp,
+                                vertical = 0.dp,
+                            ),
+                        ) {
+                            Text("重试", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

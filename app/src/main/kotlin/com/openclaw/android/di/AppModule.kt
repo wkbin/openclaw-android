@@ -45,6 +45,7 @@ object AppModule {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .pingInterval(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 }

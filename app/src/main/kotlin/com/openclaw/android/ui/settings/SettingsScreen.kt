@@ -1,6 +1,5 @@
 package com.openclaw.android.ui.settings
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -32,54 +31,92 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.openclaw.android.BuildConfig
 import com.openclaw.android.model.GatewayConfig
+import com.openclaw.android.ui.navigation.AboutRoute
+import com.openclaw.android.ui.navigation.BatteryRoute
+import com.openclaw.android.ui.navigation.CommandRoute
+import com.openclaw.android.ui.navigation.CronRoute
+import com.openclaw.android.ui.navigation.DeveloperRoute
+import com.openclaw.android.ui.navigation.ModelsRoute
+import com.openclaw.android.ui.navigation.NotificationsRoute
+import com.openclaw.android.ui.navigation.SettingsRootRoute
+import com.openclaw.android.ui.navigation.SkillsRoute
+import com.openclaw.android.ui.navigation.ThemeRoute
+import com.openclaw.android.ui.navigation.UpdateRoute
+import com.openclaw.android.ui.navigation.VendorRoute
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    var section by rememberSaveable { mutableStateOf<String?>(null) }
-    BackHandler(enabled = section != null) {
-        section = null
-    }
-
-    when (section) {
-        "models" -> ModelsScreen(
-            viewModel = viewModel,
-            onBack = { section = null },
-        )
-
-        "theme" -> ThemeScreen(
-            viewModel = viewModel,
-            onBack = { section = null },
-        )
-
-        "update" -> UpdateSection(onBack = { section = null })
-        "about" -> AboutScreen(viewModel = viewModel, onBack = { section = null })
-        "battery" -> BatteryOptimizationScreen(onBack = { section = null })
-        "notifications" -> NotificationPermissionScreen(onBack = { section = null })
-        "developer" -> DeveloperModeScreen(
-            viewModel = viewModel,
-            onBack = { section = null },
-        )
-        "command" -> CommandScreen(
-            viewModel = viewModel,
-            onBack = { section = null },
-        )
-        "vendor" -> VendorBatteryScreen(onBack = { section = null })
-        "cron" -> CronScreen(onBack = { section = null })
-        "skills" -> SkillsScreen(onBack = { section = null })
-        else -> MainSettings(
-            viewModel = viewModel,
-            onOpen = { section = it },
-        )
+    val navController = rememberNavController()
+    NavHost(
+        navController = navController,
+        startDestination = SettingsRootRoute,
+    ) {
+        composable<SettingsRootRoute> {
+            MainSettings(
+                viewModel = viewModel,
+                onOpen = { route -> navController.navigate(route) },
+            )
+        }
+        composable<ModelsRoute> {
+            ModelsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ThemeRoute> {
+            ThemeScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<UpdateRoute> {
+            UpdateSection(onBack = { navController.popBackStack() })
+        }
+        composable<AboutRoute> {
+            AboutScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<BatteryRoute> {
+            BatteryOptimizationScreen(onBack = { navController.popBackStack() })
+        }
+        composable<NotificationsRoute> {
+            NotificationPermissionScreen(onBack = { navController.popBackStack() })
+        }
+        composable<DeveloperRoute> {
+            DeveloperModeScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<CommandRoute> {
+            CommandScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<VendorRoute> {
+            VendorBatteryScreen(onBack = { navController.popBackStack() })
+        }
+        composable<CronRoute> {
+            CronScreen(onBack = { navController.popBackStack() })
+        }
+        composable<SkillsRoute> {
+            SkillsScreen(onBack = { navController.popBackStack() })
+        }
     }
 }
 
@@ -87,7 +124,7 @@ fun SettingsScreen(
 @Composable
 internal fun MainSettings(
     viewModel: SettingsViewModel,
-    onOpen: (String) -> Unit,
+    onOpen: (Any) -> Unit,
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
     var draft by remember { mutableStateOf(GatewayConfig()) }
@@ -117,24 +154,24 @@ internal fun MainSettings(
                 SectionTitle("模型")
                 SettingsGroup {
                     SettingsRow(
-                        title = "模型厂商",
-                        subtitle = "OpenAI / Anthropic / DeepSeek",
+                        title = "模型",
+                        subtitle = "厂商 / 默认模型 / API Key",
                         icon = Icons.Outlined.SmartToy,
-                        onClick = { onOpen("models") },
+                        onClick = { onOpen(ModelsRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "Cron 调度",
                         subtitle = "定时任务 / 读写 jobs 配置",
                         icon = Icons.Outlined.Schedule,
-                        onClick = { onOpen("cron") },
+                        onClick = { onOpen(CronRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "技能管理",
                         subtitle = "扫描技能目录 / 启用停用",
                         icon = Icons.Outlined.Psychology,
-                        onClick = { onOpen("skills") },
+                        onClick = { onOpen(SkillsRoute) },
                     )
                 }
             }
@@ -146,7 +183,7 @@ internal fun MainSettings(
                         title = "主题与缩放",
                         subtitle = "深色 / 浅色 / 界面缩放",
                         icon = Icons.Outlined.Palette,
-                        onClick = { onOpen("theme") },
+                        onClick = { onOpen(ThemeRoute) },
                     )
                 }
             }
@@ -217,14 +254,14 @@ internal fun MainSettings(
                         title = "检查更新",
                         subtitle = "当前版本 ${BuildConfig.VERSION_NAME}",
                         icon = Icons.Outlined.SystemUpdate,
-                        onClick = { onOpen("update") },
+                        onClick = { onOpen(UpdateRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "关于与支持",
                         subtitle = "GitHub 项目地址",
                         icon = Icons.Outlined.Info,
-                        onClick = { onOpen("about") },
+                        onClick = { onOpen(AboutRoute) },
                         divider = true,
                     )
                     SettingsRow(
@@ -243,35 +280,35 @@ internal fun MainSettings(
                         title = "电池优化",
                         subtitle = "允许网关后台持续运行",
                         icon = Icons.Outlined.BatteryFull,
-                        onClick = { onOpen("battery") },
+                        onClick = { onOpen(BatteryRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "通知权限",
                         subtitle = "Android 13+ 需允许前台服务通知",
                         icon = Icons.Outlined.Notifications,
-                        onClick = { onOpen("notifications") },
+                        onClick = { onOpen(NotificationsRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "终端",
                         subtitle = "连续运行 openclaw 命令",
                         icon = Icons.Outlined.Terminal,
-                        onClick = { onOpen("command") },
+                        onClick = { onOpen(CommandRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "厂商保活",
                         subtitle = "小米 / 华为 / OPPO / vivo / 三星",
                         icon = Icons.Outlined.Smartphone,
-                        onClick = { onOpen("vendor") },
+                        onClick = { onOpen(VendorRoute) },
                         divider = true,
                     )
                     SettingsRow(
                         title = "开发者模式",
                         subtitle = "查看和编辑 openclaw.json",
                         icon = Icons.Outlined.Code,
-                        onClick = { onOpen("developer") },
+                        onClick = { onOpen(DeveloperRoute) },
                     )
                 }
             }

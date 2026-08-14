@@ -151,43 +151,45 @@ fun DashboardScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                val busy = status.lifecycle == GatewayLifecycle.Starting ||
+                    status.lifecycle == GatewayLifecycle.Stopping
+                val running = status.lifecycle == GatewayLifecycle.Running ||
+                    status.lifecycle == GatewayLifecycle.Starting ||
+                    status.lifecycle == GatewayLifecycle.Stopping
+                Button(
+                    onClick = { if (running) viewModel.stop() else viewModel.start() },
+                    enabled = !busy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                 ) {
-                    Button(
-                        onClick = viewModel::start,
-                        enabled = status.lifecycle == GatewayLifecycle.Idle ||
-                            status.lifecycle == GatewayLifecycle.Error ||
-                            status.lifecycle == GatewayLifecycle.Crashed,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                    ) {
-                        if (status.lifecycle == GatewayLifecycle.Starting) {
+                    when {
+                        status.lifecycle == GatewayLifecycle.Starting -> {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                             )
                             Spacer(Modifier.width(8.dp))
                             Text("启动中")
-                        } else {
+                        }
+                        status.lifecycle == GatewayLifecycle.Stopping -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("停止中")
+                        }
+                        running -> {
+                            Icon(Icons.Outlined.Stop, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("停止")
+                        }
+                        else -> {
                             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("启动")
                         }
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::stop,
-                        enabled = status.lifecycle == GatewayLifecycle.Running ||
-                            status.lifecycle == GatewayLifecycle.Starting,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                    ) {
-                        Icon(Icons.Outlined.Stop, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("停止")
                     }
                 }
             }
@@ -420,7 +422,6 @@ private fun AccessCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -445,13 +446,13 @@ private fun AccessCard(
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(
                     onClick = onCopy,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -459,7 +460,7 @@ private fun AccessCard(
                 }
                 OutlinedButton(
                     onClick = onOpen,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
                     Spacer(Modifier.width(8.dp))

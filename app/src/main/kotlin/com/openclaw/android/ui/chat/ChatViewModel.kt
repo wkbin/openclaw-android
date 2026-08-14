@@ -21,6 +21,8 @@ class ChatViewModel @Inject constructor(
     val status: StateFlow<String> = chatClient.status
     val isStreaming: StateFlow<Boolean> = chatClient.isStreaming
     val currentSessionKey: StateFlow<String?> = chatClient.currentSessionKey
+    val hasOlderMessages: StateFlow<Boolean> = chatClient.hasOlderMessages
+    val loadingOlder: StateFlow<Boolean> = chatClient.loadingOlder
 
     fun start() {
         chatClient.start()
@@ -53,5 +55,13 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         chatClient.stopGeneration()
+    }
+
+    fun loadOlderMessages() {
+        chatClient.loadOlderMessages()
+    }
+
+    fun retryMessage(messageId: String) {
+        chatClient.retryMessage(messageId)
     }
 }

@@ -8,7 +8,10 @@ import android.os.IBinder
 import com.openclaw.android.model.GatewayLifecycle
 import com.openclaw.android.model.GatewayConfig
 import com.openclaw.android.model.LogLevel
+import com.openclaw.android.model.ModelCatalog
 import com.openclaw.android.model.UpdateState
+import com.openclaw.android.model.apiKeyFor
+import com.openclaw.android.model.envVarFor
 import com.openclaw.android.repository.GatewayRepository
 import com.openclaw.android.repository.LogRepository
 import com.openclaw.android.repository.SettingsRepository
@@ -65,11 +68,14 @@ class GatewayService : Service() {
     private var pendingUpdateVersion: String? = null
     private var pendingUpdateHealthStart: Long? = null
     private var pendingUpdateRollback = false
+    // 最近一次已告警的崩溃/错误生命周期，用于"仅提醒一次"
+    private var lastAlertLifecycle: GatewayLifecycle? = null
 
     override fun onCreate() {
         super.onCreate()
         NotificationUtil.ensureChannel(this)
         observeStatusForNotification()
+        observeUpdateForNotification()
     }
 
     override fun onStartCommand(
@@ -98,10 +104,10 @@ class GatewayService : Service() {
     override fun onDestroy() {
         healthJob?.cancel()
         memoryJob?.cancel()
-        CoroutineScope(Dispatchers.IO).launch {
-            processManager.stop()
+        serviceScope.launch {
+            runCatching { processManager.stop() }
+            serviceScope.cancel()
         }
-        serviceScope.cancel()
         super.onDestroy()
     }
 
@@ -232,59 +238,44 @@ class GatewayService : Service() {
         }.getOrDefault(JSONObject())
         val existingEnv = root.optJSONObject("env")
         val env = existingEnv ?: JSONObject()
-        if (config.apiKeys.deepseek.isNotBlank() || config.defaultModel.isNotBlank()) {
-            env.put("DEEPSEEK_API_KEY", config.apiKeys.deepseek)
-        }
-        if (config.apiKeys.openai.isNotBlank()) {
-            env.put("OPENAI_API_KEY", config.apiKeys.openai)
-        }
-        if (config.apiKeys.anthropic.isNotBlank()) {
-            env.put("ANTHROPIC_API_KEY", config.apiKeys.anthropic)
+        ModelCatalog.providers.forEach { provider ->
+            val key = config.apiKeys.apiKeyFor(provider.id)
+            if (key.isNotBlank()) env.put(envVarFor(provider.id), key)
         }
         root.put("env", env)
-        if (config.apiKeys.deepseek.isNotBlank()) {
-            val providers = JSONObject().put(
-                "deepseek",
-                JSONObject()
-                    .put("baseUrl", "https://api.deepseek.com/v1")
-                    .put("apiKey", "\${DEEPSEEK_API_KEY}")
-                    .put("api", "openai-completions")
-                    .put("timeoutSeconds", 600)
-                    .put(
-                        "models",
-                        JSONArray()
-                            .put(
-                                JSONObject()
-                                    .put("id", "deepseek-v4-flash")
-                                    .put("name", "DeepSeek V4 Flash"),
-                            )
-                            .put(JSONObject().put("id", "deepseek-chat").put("name", "DeepSeek Chat"))
-                            .put(
-                                JSONObject()
-                                    .put("id", "deepseek-reasoner")
-                                    .put("name", "DeepSeek Reasoner"),
-                            ),
-                    ),
-            )
-            val model = JSONObject().put(
-                "primary",
-                config.defaultModel.ifBlank { "deepseek/deepseek-v4-flash" },
-            )
-            val agents = JSONObject().put(
-                "defaults",
-                JSONObject()
-                    .put("model", model)
-                    .put("timeoutSeconds", 600),
-            )
-            val mergedModels = root.optJSONObject("models") ?: JSONObject()
-            mergedModels.put("providers", providers)
-            root.put("models", mergedModels)
 
-            val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
-            mergedAgents.remove("list")
-            mergedAgents.put("defaults", agents.optJSONObject("defaults"))
-            root.put("agents", mergedAgents)
+        // 每个配置了 Key 的厂商写一个 provider 块，网关按 baseUrl/api/models 识别
+        val mergedModels = root.optJSONObject("models") ?: JSONObject()
+        val providers = mergedModels.optJSONObject("providers") ?: JSONObject()
+        ModelCatalog.providers.forEach { provider ->
+            if (config.apiKeys.apiKeyFor(provider.id).isNotBlank()) {
+                val models = JSONArray()
+                provider.models.forEach { model ->
+                    models.put(JSONObject().put("id", model.id).put("name", model.name))
+                }
+                providers.put(
+                    provider.id,
+                    JSONObject()
+                        .put("baseUrl", provider.baseUrl)
+                        .put("apiKey", "\${${envVarFor(provider.id)}}")
+                        .put("api", provider.api)
+                        .put("timeoutSeconds", 600)
+                        .put("models", models),
+                )
+            }
         }
+        mergedModels.put("providers", providers)
+        root.put("models", mergedModels)
+
+        // 默认模型独立于供应商 Key，必须始终写入，否则网关回退到内置默认模型
+        val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
+        mergedAgents.remove("list")
+        val defaults = JSONObject().put("timeoutSeconds", 600)
+        if (config.defaultModel.isNotBlank()) {
+            defaults.put("model", JSONObject().put("primary", config.defaultModel))
+        }
+        mergedAgents.put("defaults", defaults)
+        root.put("agents", mergedAgents)
         FileUtil.atomicWriteText(configFile, root.toString(2))
     }
 
@@ -350,6 +341,62 @@ class GatewayService : Service() {
                     NotificationUtil.NOTIFICATION_ID,
                     NotificationUtil.buildStatusNotification(this@GatewayService, status),
                 )
+                // 主动告警：仅在进入崩溃/错误状态时提醒一次，避免常驻通知反复骚扰
+                val alerting = status.lifecycle == GatewayLifecycle.Crashed ||
+                    status.lifecycle == GatewayLifecycle.Error
+                if (alerting && lastAlertLifecycle != status.lifecycle) {
+                    NotificationUtil.notifyAlert(
+                        this@GatewayService,
+                        when (status.lifecycle) {
+                            GatewayLifecycle.Crashed -> "OpenClaw 已崩溃"
+                            else -> "OpenClaw 启动失败"
+                        },
+                        status.message
+                            ?: "exitCode=${status.exitCode ?: "未知"}",
+                    )
+                }
+                lastAlertLifecycle = if (alerting) status.lifecycle else null
+            }
+        }
+    }
+
+    private fun observeUpdateForNotification() {
+        serviceScope.launch {
+            var lastStateKey: String? = null
+            updateRepository.state.collect { state ->
+                val manager = getSystemService(NotificationManager::class.java)
+                val notification = NotificationUtil.buildUpdateNotification(this@GatewayService, state)
+                if (notification != null) {
+                    manager.notify(NotificationUtil.UPDATE_NOTIFICATION_ID, notification)
+                } else {
+                    manager.cancel(NotificationUtil.UPDATE_NOTIFICATION_ID)
+                }
+                // 完成/失败作为主动告警再提醒一次
+                when (state) {
+                    is UpdateState.Completed -> {
+                        val key = "completed:${state.version}:${state.rollback}"
+                        if (key != lastStateKey) {
+                            NotificationUtil.notifyAlert(
+                                this@GatewayService,
+                                if (state.rollback) "更新回滚完成" else "更新完成",
+                                "当前版本：v${state.version}",
+                            )
+                            lastStateKey = key
+                        }
+                    }
+                    is UpdateState.Failed -> {
+                        val key = "failed:${state.failedVersion ?: ""}:${state.message}"
+                        if (key != lastStateKey) {
+                            NotificationUtil.notifyAlert(
+                                this@GatewayService,
+                                "更新失败",
+                                state.message,
+                            )
+                            lastStateKey = key
+                        }
+                    }
+                    else -> lastStateKey = null
+                }
             }
         }
     }

@@ -13,6 +13,23 @@ import javax.inject.Singleton
 
 private const val MIN_BOOTSTRAP_SPACE_BYTES = 512L * 1024 * 1024
 
+/**
+ * Files that must be present after bootstrap extraction.
+ * When the bundled bootstrap gains new required deps (web-tree-sitter, pi-tui stub,
+ * highlight.js stub, @anthropic-ai/sdk), older extracted dirs lack them and must be
+ * re-extracted, otherwise startup fails with "Cannot find module".
+ */
+private val BOOTSTRAP_REQUIRED_FILES = listOf(
+    "openclaw.mjs",
+    "node_modules/web-tree-sitter/web-tree-sitter.wasm",
+    "node_modules/web-tree-sitter/web-tree-sitter.js",
+    "node_modules/tree-sitter-bash/tree-sitter-bash.wasm",
+    "node_modules/tree-sitter-bash/bindings/node/index.js",
+    "node_modules/@earendil-works/pi-tui/index.mjs",
+    "node_modules/highlight.js/index.mjs",
+    "node_modules/@anthropic-ai/sdk/index.js",
+)
+
 data class RuntimePaths(
     val nodeBinary: File,
     val nodeLibsDir: File,
@@ -51,7 +68,7 @@ class AssetExtractor @Inject constructor(
             else "bootstrap"
         val currentDir = File(versionsDir, version)
 
-        if (!currentDir.exists() || !File(currentDir, "openclaw.mjs").exists()) {
+        if (!isBootstrapInstalled(currentDir)) {
             installBootstrap(root, versionsDir, pointerFile)
         }
 
@@ -62,6 +79,11 @@ class AssetExtractor @Inject constructor(
             currentVersionDir = File(versionsDir, version),
             version = version,
         )
+    }
+
+    private fun isBootstrapInstalled(currentDir: File): Boolean {
+        if (!currentDir.isDirectory) return false
+        return BOOTSTRAP_REQUIRED_FILES.all { File(currentDir, it).isFile }
     }
 
     private fun installBootstrap(

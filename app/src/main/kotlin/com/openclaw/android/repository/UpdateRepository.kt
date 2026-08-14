@@ -309,6 +309,11 @@ class UpdateRepository @Inject constructor(
     ) {
         val source = File(versionsDir, version)
         if (!source.exists()) return
+        // 单独校验备份空间：备份目录可能位于不同挂载点，且可用空间是动态的，不能只依赖安装前的估算
+        val size = directorySize(source)
+        if (FileUtil.availableBytes(backupsDir) < size + EXTRACT_MIN_BYTES) {
+            throw IOException("备份空间不足，无法备份版本 $version")
+        }
         val target = File(backupsDir, version)
         FileUtil.deleteRecursively(target)
         withContext(Dispatchers.IO) {
