@@ -36,5 +36,8 @@ class ChatViewModel @Inject constructor(
     fun newSession() {
         chatClient.newSession()
     }
-}
 
+    fun selectSession(key: String) {
+        chatClient.selectSession(key)
+    }
+}

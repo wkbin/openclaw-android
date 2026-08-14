@@ -2,6 +2,7 @@ package com.openclaw.android.ui.chat
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -109,6 +110,10 @@ fun ChatScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectSession(session.key)
+                                    scope.launch { drawerState.close() }
+                                }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                         )
                     }

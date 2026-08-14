@@ -101,6 +101,13 @@ class OpenClawChatClient @Inject constructor(
         }
     }
 
+    fun selectSession(key: String) {
+        scope.launch {
+            sessionKey = key
+            loadHistory()
+        }
+    }
+
     private suspend fun connectLoop() {
         stopping = false
         while (!stopping) {
