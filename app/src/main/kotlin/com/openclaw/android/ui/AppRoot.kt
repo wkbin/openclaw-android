@@ -41,6 +41,7 @@ private enum class Destination(
 @Composable
 fun AppRoot(
     viewModel: AppViewModel = hiltViewModel(),
+    openChat: Boolean = false,
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
     val darkTheme = when (config.themeMode) {
@@ -49,7 +50,7 @@ fun AppRoot(
         else -> isSystemInDarkTheme()
     }
     var selected by rememberSaveable { mutableStateOf(Destination.Dashboard) }
-    var chatOpen by rememberSaveable { mutableStateOf(false) }
+    var chatOpen by rememberSaveable { mutableStateOf(openChat) }
 
     if (!config.setupCompleted) {
         OpenClawTheme(

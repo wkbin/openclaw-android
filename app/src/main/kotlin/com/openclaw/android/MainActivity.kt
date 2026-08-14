@@ -12,8 +12,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val openChat = intent?.getBooleanExtra(EXTRA_OPEN_CHAT, false) ?: false
         setContent {
-            AppRoot()
+            AppRoot(openChat = openChat)
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CHAT = "com.openclaw.android.extra.OPEN_CHAT"
     }
 }

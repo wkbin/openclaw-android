@@ -38,7 +38,8 @@ object NotificationUtil {
         val openIntent = PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java),
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_CHAT, true),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -84,4 +85,3 @@ object NotificationUtil {
             .build()
     }
 }
-
