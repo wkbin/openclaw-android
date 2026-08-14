@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -54,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -259,8 +262,8 @@ private fun MainSettings(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
-                        title = "命令行",
-                        subtitle = "运行 openclaw 命令",
+                        title = "终端",
+                        subtitle = "连续运行 openclaw 命令",
                         icon = Icons.Outlined.Code,
                         onClick = { onOpen("command") },
                     )
@@ -374,12 +377,34 @@ private fun CommandScreen(
                 label = { Text("openclaw 命令，例如 doctor / status / models list") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        running = true
+                        scope.launch {
+                            val result = viewModel.runCommand(command)
+                            output = buildString {
+                                append(output)
+                                if (output.isNotBlank()) append("\n\n")
+                                append("> openclaw ").append(command).append('\n')
+                                append(result)
+                            }
+                            running = false
+                        }
+                    },
+                ),
             )
             Button(
                 onClick = {
                     running = true
                     scope.launch {
-                        output = viewModel.runCommand(command)
+                        val result = viewModel.runCommand(command)
+                        output = buildString {
+                            append(output)
+                            if (output.isNotBlank()) append("\n\n")
+                            append("> openclaw ").append(command).append('\n')
+                            append(result)
+                        }
                         running = false
                     }
                 },
@@ -387,6 +412,12 @@ private fun CommandScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (running) "运行中…" else "运行")
+            }
+            OutlinedButton(
+                onClick = { output = "" },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("清空输出")
             }
             Text(
                 text = output,

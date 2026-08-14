@@ -1,6 +1,7 @@
 package com.openclaw.android.ui.chat
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -88,6 +90,26 @@ fun ChatScreen(
                 val fileName = "image-${System.currentTimeMillis()}.${mimeType.substringAfter('/')}"
                 val attachment = ChatAttachment(
                     type = "image",
+                    mimeType = mimeType,
+                    fileName = fileName,
+                    base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
+                )
+                val text = input.trim()
+                viewModel.send(text, attachment)
+                input = ""
+            }
+        }
+    }
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes != null) {
+                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                val fileName = queryDisplayName(context, uri) ?: "file-${System.currentTimeMillis()}"
+                val attachment = ChatAttachment(
+                    type = "file",
                     mimeType = mimeType,
                     fileName = fileName,
                     base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
@@ -228,6 +250,14 @@ fun ChatScreen(
                     ) {
                         Icon(Icons.Outlined.Image, contentDescription = "发送图片")
                     }
+                    IconButton(
+                        onClick = {
+                            filePicker.launch("*/*")
+                        },
+                        enabled = connected,
+                    ) {
+                        Icon(Icons.Outlined.AttachFile, contentDescription = "发送文件")
+                    }
                 }
             },
         ) { innerPadding ->
@@ -262,6 +292,22 @@ fun ChatScreen(
             }
         }
     }
+}
+
+private fun queryDisplayName(
+    context: android.content.Context,
+    uri: Uri,
+): String? {
+    return runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) cursor.getString(index) else null
+            } else {
+                null
+            }
+        }
+    }.getOrNull()
 }
 
 @Composable
