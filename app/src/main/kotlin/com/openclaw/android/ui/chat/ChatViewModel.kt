@@ -3,6 +3,7 @@ package com.openclaw.android.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openclaw.android.model.ChatMessage
+import com.openclaw.android.model.ChatAttachment
 import com.openclaw.android.model.ChatSession
 import com.openclaw.android.service.OpenClawChatClient
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,9 +28,12 @@ class ChatViewModel @Inject constructor(
         chatClient.stop()
     }
 
-    fun send(text: String) {
+    fun send(
+        text: String,
+        attachment: ChatAttachment? = null,
+    ) {
         viewModelScope.launch {
-            chatClient.sendMessage(text)
+            chatClient.sendMessage(text, attachment)
         }
     }
 

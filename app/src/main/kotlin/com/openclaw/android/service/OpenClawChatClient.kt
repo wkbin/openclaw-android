@@ -2,6 +2,7 @@ package com.openclaw.android.service
 
 import android.content.Context
 import com.openclaw.android.model.ChatMessage
+import com.openclaw.android.model.ChatAttachment
 import com.openclaw.android.model.ChatSession
 import com.openclaw.android.repository.SettingsRepository
 import com.openclaw.android.util.DeviceIdentityStore
@@ -74,7 +75,10 @@ class OpenClawChatClient @Inject constructor(
         _status.value = "已停止"
     }
 
-    suspend fun sendMessage(text: String) = withContext(Dispatchers.IO) {
+    suspend fun sendMessage(
+        text: String,
+        attachment: ChatAttachment? = null,
+    ) = withContext(Dispatchers.IO) {
         val key = sessionKey ?: return@withContext
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return@withContext
@@ -91,6 +95,18 @@ class OpenClawChatClient @Inject constructor(
             .put("message", trimmed)
             .put("deliver", false)
             .put("idempotencyKey", UUID.randomUUID().toString())
+        if (attachment != null) {
+            params.put(
+                "attachments",
+                JSONArray().put(
+                    JSONObject()
+                        .put("type", attachment.type)
+                        .put("mimeType", attachment.mimeType)
+                        .put("fileName", attachment.fileName)
+                        .put("content", attachment.base64),
+                ),
+            )
+        }
         runCatching { request("chat.send", params) }
     }
 

@@ -1,6 +1,11 @@
 package com.openclaw.android.ui.chat
 
+import android.net.Uri
+import android.util.Base64
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,12 +50,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.ChatMessage
+import com.openclaw.android.model.ChatAttachment
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,10 +70,31 @@ fun ChatScreen(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val connected by viewModel.connected.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var input by remember { mutableStateOf("") }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes != null) {
+                val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                val fileName = "image-${System.currentTimeMillis()}.${mimeType.substringAfter('/')}"
+                val attachment = ChatAttachment(
+                    type = "image",
+                    mimeType = mimeType,
+                    fileName = fileName,
+                    base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
+                )
+                val text = input.trim()
+                viewModel.send(text, attachment)
+                input = ""
+            }
+        }
+    }
 
     BackHandler(onBack = onBack)
 
@@ -163,6 +192,18 @@ fun ChatScreen(
                         enabled = connected,
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                    }
+                    IconButton(
+                        onClick = {
+                            imagePicker.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        },
+                        enabled = connected,
+                    ) {
+                        Icon(Icons.Outlined.Image, contentDescription = "发送图片")
                     }
                 }
             },

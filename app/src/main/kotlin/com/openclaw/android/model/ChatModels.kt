@@ -12,3 +12,9 @@ data class ChatSession(
     val title: String,
 )
 
+data class ChatAttachment(
+    val type: String,
+    val mimeType: String,
+    val fileName: String,
+    val base64: String,
+)
