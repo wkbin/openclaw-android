@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,6 +85,10 @@ fun SettingsScreen(
         "about" -> AboutScreen(onBack = { section = null })
         "battery" -> BatteryOptimizationScreen(onBack = { section = null })
         "developer" -> DeveloperModeScreen(
+            viewModel = viewModel,
+            onBack = { section = null },
+        )
+        "command" -> CommandScreen(
             viewModel = viewModel,
             onBack = { section = null },
         )
@@ -250,8 +255,78 @@ private fun MainSettings(
                         icon = Icons.Outlined.Settings,
                         onClick = { onOpen("battery") },
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "命令行",
+                        subtitle = "运行 openclaw 命令",
+                        icon = Icons.Outlined.Code,
+                        onClick = { onOpen("command") },
+                    )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CommandScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+) {
+    var command by remember { mutableStateOf("doctor") }
+    var output by remember { mutableStateOf("") }
+    var running by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    BackHandler(onBack = onBack)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("命令行") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = command,
+                onValueChange = { command = it },
+                label = { Text("openclaw 命令，例如 doctor / status / models list") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    running = true
+                    scope.launch {
+                        output = viewModel.runCommand(command)
+                        running = false
+                    }
+                },
+                enabled = !running,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (running) "运行中…" else "运行")
+            }
+            Text(
+                text = output,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            )
         }
     }
 }
