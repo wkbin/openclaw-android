@@ -44,4 +44,8 @@ class ChatViewModel @Inject constructor(
     fun selectSession(key: String) {
         chatClient.selectSession(key)
     }
+
+    fun resetSession() {
+        chatClient.resetCurrentSession()
+    }
 }

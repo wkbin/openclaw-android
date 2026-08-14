@@ -124,6 +124,16 @@ class OpenClawChatClient @Inject constructor(
         }
     }
 
+    fun resetCurrentSession() {
+        scope.launch {
+            val key = sessionKey ?: return@launch
+            runCatching {
+                request("sessions.reset", JSONObject().put("sessionKey", key))
+            }
+            loadHistory()
+        }
+    }
+
     private suspend fun connectLoop() {
         stopping = false
         while (!stopping) {

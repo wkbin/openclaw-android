@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -129,6 +130,17 @@ fun ChatScreen(
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text("新建会话")
+                }
+                OutlinedButton(
+                    onClick = {
+                        viewModel.resetSession()
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                ) {
+                    Text("清空当前会话")
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
