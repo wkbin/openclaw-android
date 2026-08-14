@@ -36,6 +36,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun resetSetup() {
+        viewModelScope.launch {
+            settingsRepository.setSetupCompleted(false)
+        }
+    }
+
     suspend fun readOpenClawConfig(): String? = withContext(Dispatchers.IO) {
         val file = openClawConfigFile()
         if (file.exists()) file.readText() else null

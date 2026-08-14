@@ -271,6 +271,13 @@ private fun MainSettings(
                         icon = Icons.Outlined.Settings,
                         onClick = { onOpen("vendor") },
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "重新初始化",
+                        subtitle = "清空向导状态，重新配置",
+                        icon = Icons.Outlined.Settings,
+                        onClick = viewModel::resetSetup,
+                    )
                 }
             }
         }
