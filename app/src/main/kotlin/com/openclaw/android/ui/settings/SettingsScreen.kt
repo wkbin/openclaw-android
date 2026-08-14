@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -81,6 +82,7 @@ fun SettingsScreen(
 
         "update" -> UpdateSection(onBack = { section = null })
         "about" -> AboutScreen(onBack = { section = null })
+        "battery" -> BatteryOptimizationScreen(onBack = { section = null })
         "developer" -> DeveloperModeScreen(
             viewModel = viewModel,
             onBack = { section = null },
@@ -227,6 +229,71 @@ private fun MainSettings(
                         icon = Icons.Outlined.Code,
                         onClick = { onOpen("developer") },
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "电池优化",
+                        subtitle = "允许网关后台持续运行",
+                        icon = Icons.Outlined.Settings,
+                        onClick = { onOpen("battery") },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatteryOptimizationScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    BackHandler(onBack = onBack)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("电池优化") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SectionTitle("为什么要设置")
+                SettingsGroup {
+                    Text(
+                        text = "Android 为了省电可能会杀掉后台的网关进程。允许忽略电池优化后，OpenClaw 能更稳定地持续运行。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            item {
+                Button(
+                    onClick = {
+                        val intent = Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:${context.packageName}"),
+                        )
+                        runCatching { context.startActivity(intent) }
+                            .onFailure {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                                )
+                            }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("去设置忽略电池优化")
                 }
             }
         }
