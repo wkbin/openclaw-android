@@ -96,6 +96,16 @@ fun UpdateScreen(
                 CircularProgressIndicator()
             }
 
+            is UpdateState.ReadyToInstall -> {
+                UpgradeCard("${current.version} 已下载并校验完成，可以安装。")
+                Button(
+                    onClick = viewModel::install,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("安装并重启")
+                }
+            }
+
             is UpdateState.Installing -> {
                 val mode = if (current.rollback) "回滚" else "安装"
                 UpgradeCard("正在$mode ${current.toVersion}。")
@@ -141,6 +151,14 @@ fun UpdateScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text("取消")
+                    }
+                    if (current.rollbackVersion != null) {
+                        Button(
+                            onClick = viewModel::rollback,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("回滚")
+                        }
                     }
                 }
             }

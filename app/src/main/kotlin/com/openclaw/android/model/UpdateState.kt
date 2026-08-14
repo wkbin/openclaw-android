@@ -35,6 +35,8 @@ sealed interface UpdateState {
 
     data class Verifying(val version: String) : UpdateState
 
+    data class ReadyToInstall(val version: String) : UpdateState
+
     data class Installing(
         val fromVersion: String,
         val toVersion: String,

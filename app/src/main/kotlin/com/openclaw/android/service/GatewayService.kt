@@ -8,6 +8,7 @@ import android.os.IBinder
 import com.openclaw.android.model.GatewayLifecycle
 import com.openclaw.android.model.GatewayConfig
 import com.openclaw.android.model.LogLevel
+import com.openclaw.android.model.UpdateState
 import com.openclaw.android.repository.GatewayRepository
 import com.openclaw.android.repository.LogRepository
 import com.openclaw.android.repository.SettingsRepository
@@ -61,6 +62,9 @@ class GatewayService : Service() {
     private var healthJob: Job? = null
     private var memoryJob: Job? = null
     private var crashRestartCount = 0
+    private var pendingUpdateVersion: String? = null
+    private var pendingUpdateHealthStart: Long? = null
+    private var pendingUpdateRollback = false
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +87,7 @@ class GatewayService : Service() {
         when (intent?.action) {
             ACTION_START -> startGatewayAsync()
             ACTION_STOP -> stopGatewayAsync()
+            ACTION_APPLY_UPDATE -> applyUpdateAsync()
             null -> startGatewayAsync()
         }
         return START_STICKY
@@ -155,6 +160,29 @@ class GatewayService : Service() {
         }
     }
 
+    private fun applyUpdateAsync() {
+        serviceScope.launch {
+            runCatching { applyUpdate() }
+                .onFailure { error ->
+                    logRepository.append(LogLevel.Error, "service", error.message ?: "升级应用失败")
+                    gatewayRepository.error(error.message ?: "升级应用失败")
+                }
+        }
+    }
+
+    private suspend fun applyUpdate() {
+        val current = updateRepository.state.value
+        if (current is UpdateState.Verifying || current is UpdateState.ReadyToInstall) {
+            updateRepository.installDownloadedArchive()
+        }
+        val restarting = updateRepository.state.value as? UpdateState.RestartingGateway
+            ?: return
+        pendingUpdateVersion = restarting.version
+        pendingUpdateRollback = false
+        pendingUpdateHealthStart = System.currentTimeMillis()
+        startGateway()
+    }
+
     private suspend fun monitorHealth(host: String, port: Int) {
         delay(3_000L)
         while (coroutineContext.isActive) {
@@ -162,9 +190,36 @@ class GatewayService : Service() {
             gatewayRepository.updateHealth(healthy)
             if (healthy) {
                 crashRestartCount = 0
+                pendingUpdateVersion?.let { version ->
+                    val rollback = pendingUpdateRollback
+                    updateRepository.markHealthCheckPassed(version, rollback)
+                    pendingUpdateVersion = null
+                    pendingUpdateHealthStart = null
+                    pendingUpdateRollback = false
+                }
+            } else {
+                pendingUpdateVersion?.let { version ->
+                    val started = pendingUpdateHealthStart ?: System.currentTimeMillis()
+                    if (System.currentTimeMillis() - started > 60_000L) {
+                        updateRepository.markHealthCheckFailed(version, "启动后 60 秒未通过健康检查")
+                        pendingUpdateVersion = null
+                        pendingUpdateHealthStart = null
+                        serviceScope.launch { rollbackUpdate() }
+                    }
+                }
             }
             delay(5_000L)
         }
+    }
+
+    private suspend fun rollbackUpdate() {
+        updateRepository.rollbackToPrevious()
+        val restarting = updateRepository.state.value as? UpdateState.RestartingGateway
+            ?: return
+        pendingUpdateVersion = restarting.version
+        pendingUpdateRollback = true
+        pendingUpdateHealthStart = System.currentTimeMillis()
+        startGateway()
     }
 
     private suspend fun writeOpenClawConfig(
@@ -252,6 +307,13 @@ class GatewayService : Service() {
                 "nodeExitCode=$exitCode\n--- stdout/stderr tail ---\n$logTail",
         )
         gatewayRepository.crashed(exitCode)
+        pendingUpdateVersion?.let { version ->
+            updateRepository.markHealthCheckFailed(version, "升级后进程退出，exitCode=$exitCode")
+            pendingUpdateVersion = null
+            pendingUpdateHealthStart = null
+            serviceScope.launch { rollbackUpdate() }
+            return
+        }
         if (crashRestartCount >= MAX_AUTO_RESTART) {
             gatewayRepository.error("连续崩溃 $MAX_AUTO_RESTART 次，已停止自动重启")
             return
@@ -295,6 +357,7 @@ class GatewayService : Service() {
     companion object {
         const val ACTION_START = "com.openclaw.android.action.START"
         const val ACTION_STOP = "com.openclaw.android.action.STOP"
+        const val ACTION_APPLY_UPDATE = "com.openclaw.android.action.APPLY_UPDATE"
         const val MAX_AUTO_RESTART = 3
     }
 }

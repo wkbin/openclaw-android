@@ -39,6 +39,8 @@ class UpdateRepository @Inject constructor(
 
     private var available: UpdateState.Available? = null
     private var pendingArchive: File? = null
+    private var pendingFromVersion: String? = null
+    private var pendingToVersion: String? = null
 
     suspend fun checkForUpdates(owner: String, repo: String) = mutex.withLock {
         _state.value = UpdateState.Checking
@@ -122,7 +124,7 @@ class UpdateRepository @Inject constructor(
             }
 
             pendingArchive = archiveFile
-            _state.value = UpdateState.Verifying(version)
+            _state.value = UpdateState.ReadyToInstall(version)
         } catch (error: Exception) {
             _state.value = UpdateState.Failed(
                 reason = UpdateFailureReason.Network,
@@ -135,10 +137,15 @@ class UpdateRepository @Inject constructor(
     }
 
     suspend fun installDownloadedArchive() = mutex.withLock {
-        val verifying = _state.value as? UpdateState.Verifying ?: return@withLock
+        val version = when (val current = _state.value) {
+            is UpdateState.Verifying -> current.version
+            is UpdateState.ReadyToInstall -> current.version
+            else -> return@withLock
+        }
         val archive = pendingArchive ?: return@withLock
-        val version = verifying.version
         val fromVersion = activeVersion()
+        pendingFromVersion = fromVersion
+        pendingToVersion = version
 
         _state.value = UpdateState.Installing(
             fromVersion = fromVersion,
@@ -184,8 +191,11 @@ class UpdateRepository @Inject constructor(
         }
     }
 
-    suspend fun markHealthCheckPassed(version: String) = mutex.withLock {
-        _state.value = UpdateState.Completed(version = version)
+    suspend fun markHealthCheckPassed(
+        version: String,
+        rollback: Boolean = false,
+    ) = mutex.withLock {
+        _state.value = UpdateState.Completed(version = version, rollback = rollback)
     }
 
     suspend fun markHealthCheckFailed(
@@ -197,15 +207,43 @@ class UpdateRepository @Inject constructor(
             reason = UpdateFailureReason.GatewayHealthCheckFailed,
             failedVersion = version,
             activeVersion = active,
-            rollbackVersion = active,
+            rollbackVersion = pendingFromVersion,
             canRetry = false,
             message = cause,
         )
     }
 
+    suspend fun rollbackToPrevious() = mutex.withLock {
+        val fromVersion = pendingFromVersion ?: return@withLock
+        val toVersion = pendingToVersion ?: return@withLock
+        _state.value = UpdateState.Installing(
+            fromVersion = toVersion,
+            toVersion = fromVersion,
+            rollback = true,
+        )
+        try {
+            withContext(Dispatchers.IO) {
+                val root = openclawRoot()
+                FileUtil.atomicWriteText(File(root, "current-version"), fromVersion)
+                settingsRepository.setLastVersion(fromVersion)
+            }
+            _state.value = UpdateState.RestartingGateway(fromVersion)
+        } catch (error: Exception) {
+            _state.value = UpdateState.Failed(
+                reason = UpdateFailureReason.RollbackFailed,
+                failedVersion = toVersion,
+                activeVersion = fromVersion,
+                canRetry = false,
+                message = error.message ?: "回滚失败",
+            )
+        }
+    }
+
     suspend fun reset() = mutex.withLock {
         available = null
         pendingArchive = null
+        pendingFromVersion = null
+        pendingToVersion = null
         _state.value = UpdateState.Idle
     }
 
@@ -346,4 +384,3 @@ class UpdateRepository @Inject constructor(
         @SerialName("browser_download_url") val browserDownloadUrl: String,
     )
 }
-
