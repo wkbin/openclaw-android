@@ -1,12 +1,18 @@
 package com.openclaw.android.util
 
+import android.Manifest
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.os.Build
+import android.provider.Settings
 import com.openclaw.android.MainActivity
 import com.openclaw.android.R
 import com.openclaw.android.model.GatewayStatus
@@ -17,6 +23,38 @@ object NotificationUtil {
     const val CHANNEL_ID = "gateway_status"
     const val NOTIFICATION_ID = 1001
     const val ACTION_STOP = "com.openclaw.android.action.STOP"
+
+    fun isNotificationPermissionGranted(context: Context): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    fun findActivity(context: Context): Activity? {
+        var current: Context = context
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            current = current.baseContext
+        }
+        return null
+    }
+
+    fun openAppNotificationSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        runCatching {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        }.getOrElse {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .setData(android.net.Uri.parse("package:${context.packageName}")))
+            }
+        }
+    }
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -62,13 +100,7 @@ object NotificationUtil {
             GatewayLifecycle.Idle -> "OpenClaw 已停止"
         }
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(context, CHANNEL_ID)
-        } else {
-            Notification.Builder(context)
-        }
-
-        return builder
+        return Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(status.message ?: "localhost:${status.port}")
@@ -77,7 +109,7 @@ object NotificationUtil {
             .setOngoing(status.lifecycle != GatewayLifecycle.Idle)
             .addAction(
                 Notification.Action.Builder(
-                    android.R.drawable.ic_menu_close_clear_cancel,
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
                     context.getString(R.string.notification_stop),
                     stopIntent,
                 ).build(),

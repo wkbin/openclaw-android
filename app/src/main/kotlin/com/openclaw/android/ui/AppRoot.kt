@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -20,7 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.ui.chat.ChatScreen
 import com.openclaw.android.ui.dashboard.DashboardScreen
@@ -34,7 +34,7 @@ private enum class Destination(
     val icon: ImageVector,
 ) {
     Dashboard("仪表盘", Icons.Outlined.Home),
-    Logs("日志", Icons.Outlined.List),
+    Logs("日志", Icons.AutoMirrored.Outlined.List),
     Settings("配置", Icons.Outlined.Settings),
 }
 

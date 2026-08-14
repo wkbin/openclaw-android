@@ -15,8 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
@@ -38,7 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.GatewayLifecycle
 import com.openclaw.android.model.GatewayStatus
@@ -341,7 +341,7 @@ private fun AccessCard(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                         contentDescription = null,
                     )
                     Text("打开浏览器")

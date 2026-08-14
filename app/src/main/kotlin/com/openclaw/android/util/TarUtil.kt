@@ -48,7 +48,7 @@ object TarUtil {
     ) {
         val pendingLinks = mutableListOf<PendingLink>()
         while (true) {
-            val entry: TarArchiveEntry = tar.nextTarEntry ?: break
+            val entry: TarArchiveEntry = tar.nextEntry ?: break
             val root = destination.canonicalFile
             var relativeName = entry.name.replace('\\', '/').trimStart('/')
             while (relativeName.startsWith("./")) {

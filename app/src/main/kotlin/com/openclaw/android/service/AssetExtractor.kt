@@ -33,10 +33,10 @@ class AssetExtractor @Inject constructor(
 
         val nodeLibsDir = File(context.filesDir, "node-libs")
         if (!File(nodeLibsDir, "libz.so.1").exists()) {
-            val assetName = "node-libs.tar"
+            val assetName = "node-libs.tar.gz"
             val archive = File(context.cacheDir, assetName)
             FileUtil.extractAsset(context, "node-libs/$assetName", archive)
-            TarUtil.extractTar(archive, nodeLibsDir)
+            TarUtil.extractTarGz(archive, nodeLibsDir)
             if (!File(nodeLibsDir, "libz.so.1").exists()) {
                 throw IOException("Node 依赖库解压不完整")
             }
@@ -68,7 +68,7 @@ class AssetExtractor @Inject constructor(
         pointerFile: File,
     ) {
         val bootstrapAssets = context.assets.list("bootstrap").orEmpty()
-        val archiveName = "openclaw-minimal.tar"
+        val archiveName = "openclaw-minimal.tar.gz"
         if (archiveName !in bootstrapAssets) {
             throw IOException("assets/bootstrap/$archiveName 不存在，请先放入离线 bootstrap 包")
         }
@@ -79,7 +79,7 @@ class AssetExtractor @Inject constructor(
         val target = File(versionsDir, "bootstrap")
         FileUtil.deleteRecursively(temporary)
         FileUtil.deleteRecursively(target)
-        TarUtil.extractTar(archive, temporary)
+        TarUtil.extractTarGz(archive, temporary)
         if (!temporary.renameTo(target)) {
             throw IOException("bootstrap 目录切换失败")
         }

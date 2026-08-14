@@ -1,7 +1,6 @@
 package com.openclaw.android.ui.setup
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.app.ActivityCompat
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.model.GatewayConfig
+import com.openclaw.android.util.NotificationUtil
 
 @Composable
 fun SetupWizardScreen(
@@ -42,20 +43,34 @@ fun SetupWizardScreen(
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
     var step by remember { mutableIntStateOf(0) }
-    var draft by remember { mutableStateOf(config) }
+    var draft by remember(config) { mutableStateOf(config) }
     val context = LocalContext.current
+    var notificationsGranted by remember {
+        mutableStateOf(NotificationUtil.isNotificationPermissionGranted(context))
+    }
+    var notificationsRequested by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { }
+    ) { granted ->
+        notificationsGranted = granted
+        notificationsRequested = true
+    }
+    LifecycleResumeEffect(Unit) {
+        notificationsGranted = NotificationUtil.isNotificationPermissionGranted(context)
+        onPauseOrDispose {}
+    }
 
-    LaunchedEffect(Unit) {
+    fun requestNotifications() {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
+            !NotificationUtil.isNotificationPermissionGranted(context)
         ) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    LaunchedEffect(Unit) {
+        requestNotifications()
     }
 
     Column(
@@ -136,6 +151,43 @@ fun SetupWizardScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (!notificationsGranted) {
+                            val permanentlyDenied = notificationsRequested &&
+                                NotificationUtil.findActivity(context)?.let { activity ->
+                                    !ActivityCompat.shouldShowRequestPermissionRationale(
+                                        activity,
+                                        Manifest.permission.POST_NOTIFICATIONS,
+                                    )
+                                } ?: false
+                            Text(
+                                text = "未授予通知权限：网关运行状态将无法通过通知栏展示。建议允许通知，并在厂商保活设置中开启后台运行。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (permanentlyDenied) {
+                                            NotificationUtil.openAppNotificationSettings(context)
+                                        } else {
+                                            requestNotifications()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        if (permanentlyDenied) {
+                                            "去系统设置开启"
+                                        } else {
+                                            "重新申请通知权限"
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -1,12 +1,16 @@
 package com.openclaw.android.ui.settings
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,11 +62,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.app.ActivityCompat
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.BuildConfig
 import com.openclaw.android.model.GatewayConfig
 import com.openclaw.android.ui.update.UpdateScreen
+import com.openclaw.android.util.NotificationUtil
 import kotlinx.coroutines.launch
 
 @Composable
@@ -88,6 +95,7 @@ fun SettingsScreen(
         "update" -> UpdateSection(onBack = { section = null })
         "about" -> AboutScreen(onBack = { section = null })
         "battery" -> BatteryOptimizationScreen(onBack = { section = null })
+        "notifications" -> NotificationPermissionScreen(onBack = { section = null })
         "developer" -> DeveloperModeScreen(
             viewModel = viewModel,
             onBack = { section = null },
@@ -259,6 +267,13 @@ private fun MainSettings(
                         subtitle = "允许网关后台持续运行",
                         icon = Icons.Outlined.Settings,
                         onClick = { onOpen("battery") },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    SettingsRow(
+                        title = "通知权限",
+                        subtitle = "Android 13+ 需允许前台服务通知",
+                        icon = Icons.Outlined.Settings,
+                        onClick = { onOpen("notifications") },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     SettingsRow(
@@ -483,6 +498,112 @@ private fun BatteryOptimizationScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("去设置忽略电池优化")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationPermissionScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(NotificationUtil.isNotificationPermissionGranted(context)) }
+    var requested by remember { mutableStateOf(false) }
+    val permanentlyDenied = !granted && requested &&
+        NotificationUtil.findActivity(context)?.let { activity ->
+            !ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+        } ?: false
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        granted = isGranted
+        requested = true
+    }
+    LifecycleResumeEffect(Unit) {
+        granted = NotificationUtil.isNotificationPermissionGranted(context)
+        onPauseOrDispose {}
+    }
+    BackHandler(onBack = onBack)
+
+    fun request() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("通知权限") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SectionTitle("为什么需要通知权限")
+                SettingsGroup {
+                    Text(
+                        text = "网关以前台服务运行，Android 13 及以上系统需要通知权限才能在通知栏持续展示运行状态（端口、健康、停止按钮）。未授权时网关仍可运行，但看不到状态通知。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            item {
+                SectionTitle("当前状态")
+                SettingsGroup {
+                    Text(
+                        text = if (granted) "已授权通知权限" else "未授权通知权限",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (granted) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
+                }
+            }
+            if (!granted) {
+                if (permanentlyDenied) {
+                    item {
+                        Text(
+                            text = "系统已不再弹出权限申请（被永久拒绝）。请在系统设置中手动开启本应用的通知开关。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = { NotificationUtil.openAppNotificationSettings(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("去系统设置开启")
+                        }
+                    }
+                } else {
+                    item {
+                        Button(
+                            onClick = { request() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("申请通知权限")
+                        }
+                    }
                 }
             }
         }

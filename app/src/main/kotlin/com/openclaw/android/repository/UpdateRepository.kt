@@ -283,7 +283,7 @@ class UpdateRepository @Inject constructor(
                     throw IOException("GitHub API ${response.code}")
                 }
                 json.decodeFromString<ReleaseDto>(
-                    response.body?.string() ?: error("Empty GitHub response"),
+                    response.body.string(),
                 )
             }
         }
@@ -305,7 +305,7 @@ class UpdateRepository @Inject constructor(
             if (!response.isSuccessful && response.code != 206) {
                 throw IOException("下载响应 ${response.code}")
             }
-            val body = response.body ?: throw IOException("下载响应为空")
+            val body = response.body
             val append = response.code == 206 && offset > 0L
             if (!append) {
                 offset = 0L
@@ -341,7 +341,7 @@ class UpdateRepository @Inject constructor(
             if (!response.isSuccessful) {
                 throw IOException("SHA256 文件响应 ${response.code}")
             }
-            response.body?.string()?.trim()?.substringBefore(' ')?.substringBefore('\t') ?: ""
+            response.body.string().trim().substringBefore(' ').substringBefore('\t')
         }
     }
 
