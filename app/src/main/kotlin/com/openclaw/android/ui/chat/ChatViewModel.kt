@@ -19,6 +19,7 @@ class ChatViewModel @Inject constructor(
     val sessions: StateFlow<List<ChatSession>> = chatClient.sessions
     val connected: StateFlow<Boolean> = chatClient.connected
     val status: StateFlow<String> = chatClient.status
+    val isStreaming: StateFlow<Boolean> = chatClient.isStreaming
 
     fun start() {
         chatClient.start()
@@ -47,5 +48,9 @@ class ChatViewModel @Inject constructor(
 
     fun resetSession() {
         chatClient.resetCurrentSession()
+    }
+
+    fun stopGeneration() {
+        chatClient.stopGeneration()
     }
 }

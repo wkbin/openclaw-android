@@ -55,11 +55,15 @@ class OpenClawChatClient @Inject constructor(
     private val _status = MutableStateFlow("未连接")
     val status: StateFlow<String> = _status.asStateFlow()
 
+    private val _isStreaming = MutableStateFlow(false)
+    val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+
     private var webSocket: WebSocket? = null
     private var identity: DeviceIdentity? = null
     private var sessionKey: String? = null
     private var nextId = 0
     private var stopping = false
+    private var activeRunId: String? = null
 
     fun start() {
         scope.launch {
@@ -107,7 +111,11 @@ class OpenClawChatClient @Inject constructor(
                 ),
             )
         }
-        runCatching { request("chat.send", params) }
+        val response = runCatching { request("chat.send", params) }.getOrNull()
+        activeRunId = response?.optString("runId")?.ifBlank { null }
+        if (activeRunId != null) {
+            _isStreaming.value = true
+        }
     }
 
     fun newSession() {
@@ -131,6 +139,23 @@ class OpenClawChatClient @Inject constructor(
                 request("sessions.reset", JSONObject().put("sessionKey", key))
             }
             loadHistory()
+        }
+    }
+
+    fun stopGeneration() {
+        scope.launch {
+            val key = sessionKey ?: return@launch
+            val runId = activeRunId ?: return@launch
+            runCatching {
+                request(
+                    "chat.abort",
+                    JSONObject()
+                        .put("sessionKey", key)
+                        .put("runId", runId),
+                )
+            }
+            _isStreaming.value = false
+            activeRunId = null
         }
     }
 
@@ -365,6 +390,10 @@ class OpenClawChatClient @Inject constructor(
                     timestampEpochMillis = System.currentTimeMillis(),
                 ),
             )
+        }
+        if (state == "final" || state == "error") {
+            _isStreaming.value = false
+            activeRunId = null
         }
     }
 

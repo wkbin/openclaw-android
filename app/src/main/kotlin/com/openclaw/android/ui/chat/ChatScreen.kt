@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -71,6 +72,7 @@ fun ChatScreen(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val connected by viewModel.connected.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
+    val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by remember { mutableStateOf("") }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -193,17 +195,26 @@ fun ChatScreen(
                         placeholder = { Text("输入消息…") },
                         enabled = connected,
                     )
-                    IconButton(
-                        onClick = {
-                            val text = input.trim()
-                            if (text.isNotEmpty()) {
-                                viewModel.send(text)
-                                input = ""
-                            }
-                        },
-                        enabled = connected,
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                    if (isStreaming) {
+                        IconButton(
+                            onClick = viewModel::stopGeneration,
+                            enabled = connected,
+                        ) {
+                            Icon(Icons.Outlined.Stop, contentDescription = "停止生成")
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                val text = input.trim()
+                                if (text.isNotEmpty()) {
+                                    viewModel.send(text)
+                                    input = ""
+                                }
+                            },
+                            enabled = connected,
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                        }
                     }
                     IconButton(
                         onClick = {
