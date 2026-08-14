@@ -16,6 +16,8 @@ data class GatewayConfig(
     val uiScale: Float = 1f,
     val setupCompleted: Boolean = false,
     val defaultModel: String = "deepseek/deepseek-v4-flash",
+    val githubOwner: String = "openclaw",
+    val githubRepo: String = "openclaw",
 )
 
 @Serializable

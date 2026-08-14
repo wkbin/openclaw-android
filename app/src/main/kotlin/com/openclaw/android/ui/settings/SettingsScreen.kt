@@ -173,6 +173,20 @@ private fun MainSettings(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
+                        value = draft.githubOwner,
+                        onValueChange = { draft = draft.copy(githubOwner = it) },
+                        label = { Text("GitHub Owner（更新检查）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = draft.githubRepo,
+                        onValueChange = { draft = draft.copy(githubRepo = it) },
+                        label = { Text("GitHub Repo（更新检查）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
                         value = argsText,
                         onValueChange = { value ->
                             argsText = value

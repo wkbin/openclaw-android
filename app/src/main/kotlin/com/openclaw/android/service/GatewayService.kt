@@ -226,6 +226,7 @@ class GatewayService : Service() {
             root.put("models", mergedModels)
 
             val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
+            mergedAgents.remove("list")
             mergedAgents.put("defaults", agents.optJSONObject("defaults"))
             root.put("agents", mergedAgents)
         }
