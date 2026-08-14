@@ -1,6 +1,7 @@
 package com.openclaw.android.ui.chat
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -216,12 +218,35 @@ private fun MessageBubble(message: ChatMessage) {
                 },
             ),
         ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Start,
+            val parts = message.text.split("```")
+            Column(
                 modifier = Modifier.padding(14.dp),
-            )
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                parts.forEachIndexed { index, part ->
+                    if (part.isBlank()) return@forEachIndexed
+                    if (index % 2 == 1) {
+                        Text(
+                            text = part.trim('\n'),
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                )
+                                .padding(10.dp),
+                        )
+                    } else {
+                        Text(
+                            text = part.trim(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Start,
+                        )
+                    }
+                }
+            }
         }
     }
 }
