@@ -295,7 +295,12 @@ class OpenClawChatClient @Inject constructor(
             val item = array.optJSONObject(index) ?: continue
             val key = item.optString("key")
             if (key.isNotBlank()) {
-                parsed.add(ChatSession(key = key, title = item.optString("title").ifBlank { key }))
+                parsed.add(
+                    ChatSession(
+                        key = key,
+                        title = item.optString("title").ifBlank { "会话 ${parsed.size + 1}" },
+                    ),
+                )
             }
         }
         _sessions.value = parsed
