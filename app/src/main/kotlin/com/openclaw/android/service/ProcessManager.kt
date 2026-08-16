@@ -22,8 +22,10 @@ class ProcessManager @Inject constructor(
     private val gatewayRepository: GatewayRepository,
 ) {
     private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var process: Process? = null
-    private var processJob: Job? = null
+    // 跨线程共享：process 由 processScope 的 IO 子协程写，isRunning()/currentPid()/stop() 在
+    // 调用方协程（网关 Main thread）读，必须 volatile 保证可见性，避免读到过期引用。
+    @Volatile private var process: Process? = null
+    @Volatile private var processJob: Job? = null
 
     @Volatile
     private var stoppedByUser = false
@@ -144,6 +146,9 @@ class ProcessManager @Inject constructor(
     }
 
     private fun pidOf(child: Process): Int? {
+        // Android 的 java.lang.Process 在 compile-time SDK 中不提供公开 pid() 方法
+        // （OpenJDK 的 Process.pid() 属 Java 9+，Android desugar 不保证暴露），
+        // 这里沿用反射读底层 pid 字段的方式。
         return runCatching {
             val field = child.javaClass.getDeclaredField("pid")
             field.isAccessible = true
@@ -156,7 +161,7 @@ class ProcessManager @Inject constructor(
         // ES module 加载，require 未定义（ReferenceError）。.cjs 强制按 CommonJS。
         File(paths.currentVersionDir, "openclaw-spawn-guard.js").delete()
         val file = File(paths.currentVersionDir, "openclaw-spawn-guard.cjs")
-        if (!file.exists()) {
+        if (!file.exists() || file.readText() != SPAWN_GUARD_JS) {
             file.parentFile?.mkdirs()
             file.writeText(SPAWN_GUARD_JS)
         }

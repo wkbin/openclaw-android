@@ -1,6 +1,7 @@
 package com.openclaw.android.service
 
 import android.content.Context
+import com.openclaw.android.data.db.ChatHistoryRepository
 import com.openclaw.android.model.ChatMessage
 import com.openclaw.android.model.ChatAttachment
 import com.openclaw.android.model.ChatContentPart
@@ -14,6 +15,8 @@ import com.openclaw.android.repository.LogRepository
 import com.openclaw.android.repository.SettingsRepository
 import com.openclaw.android.util.DeviceIdentityStore
 import com.openclaw.android.util.DeviceIdentity
+import com.openclaw.android.util.AppForegroundTracker
+import com.openclaw.android.util.NotificationUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +30,7 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -50,6 +54,8 @@ class OpenClawChatClient @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val assetExtractor: AssetExtractor,
     private val logRepository: LogRepository,
+    private val chatHistoryRepository: ChatHistoryRepository,
+    private val foregroundTracker: AppForegroundTracker,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pending = ConcurrentHashMap<String, CompletableFuture<JSONObject>>()
@@ -79,8 +85,8 @@ class OpenClawChatClient @Inject constructor(
     val loadingOlder: StateFlow<Boolean> = _loadingOlder.asStateFlow()
 
     private var webSocket: WebSocket? = null
-    private var identity: DeviceIdentity? = null
-    private var sessionKey: String? = null
+    @Volatile private var identity: DeviceIdentity? = null
+    @Volatile private var sessionKey: String? = null
     // 原子递增的 RPC id：request() 可能从多个 IO 线程并发调用，普通 ++ 非原子会产生重复 id
     private val nextId = AtomicLong(0)
 
@@ -88,15 +94,20 @@ class OpenClawChatClient @Inject constructor(
         sessionKey = key
         _currentSessionKey.value = key
     }
-    private var stopping = false
-    private var activeRunId: String? = null
+    @Volatile private var stopping = false
+    @Volatile private var activeRunId: String? = null
+    // 序列化所有对 _messages / runMessageIds / toolCallMessageIds 的「读-改-写」。
+    // OkHttp 回调线程（onMessage/handleFrame）与 scope IO 协程会并发改动这些状态，
+    // 单纯依赖 StateFlow.value 的单次原子读写仍会让「read-modify-write」互相覆盖，
+    // 造成丢消息/丢状态。用可重入的 synchronized 同时覆盖回调线程与协程两处。
+    private val chatLock = Any()
     // runId -> 承载该轮流式文本 + 工具卡片的消息 id
     private val runMessageIds = ConcurrentHashMap<String, String>()
     // toolCallId -> 承载该工具卡片的消息 id
     private val toolCallMessageIds = ConcurrentHashMap<String, String>()
     // chat.history 分页：下一批更早消息的 offset 游标
-    private var historyOffset = 0
-    private var historyHasMore = false
+    @Volatile private var historyOffset = 0
+    @Volatile private var historyHasMore = false
     // 发送失败的用户消息 id -> (内容, 附件) 快照，供 retryMessage 重发
     private val pendingSends = ConcurrentHashMap<String, Pair<String, ChatAttachment?>>()
 
@@ -112,23 +123,28 @@ class OpenClawChatClient @Inject constructor(
         webSocket = null
         _connected.value = false
         _status.value = "已停止"
-        pending.values.forEach {
-            it.completeExceptionally(IllegalStateException("client stopped"))
+        failAllPending("client stopped")
+        synchronized(chatLock) {
+            runMessageIds.clear()
+            toolCallMessageIds.clear()
         }
-        pending.clear()
-        runMessageIds.clear()
-        toolCallMessageIds.clear()
         historyOffset = 0
         historyHasMore = false
         _hasOlderMessages.value = false
         _loadingOlder.value = false
     }
 
+    /** 立即失败并清空所有等待中的 RPC 请求，避免掉线/停止后各 request() 空等 20 秒。 */
+    private fun failAllPending(cause: String) {
+        val e = IllegalStateException(cause)
+        pending.values.forEach { it.completeExceptionally(e) }
+        pending.clear()
+    }
+
     suspend fun sendMessage(
         text: String,
         attachment: ChatAttachment? = null,
     ) = withContext(Dispatchers.IO) {
-        val key = sessionKey ?: return@withContext
         val trimmed = text.trim()
         // 只选图片/附件、未输入文字时，用占位文案作为消息内容，避免空消息直接丢弃
         val displayText = if (trimmed.isNotEmpty()) {
@@ -142,6 +158,22 @@ class OpenClawChatClient @Inject constructor(
         if (displayText.isBlank()) return@withContext
 
         val id = UUID.randomUUID().toString()
+        val key = sessionKey
+        if (key.isNullOrBlank()) {
+            // 未连接/未初始化时不静默丢弃：落一条发送失败的消息，供用户重试
+            appendMessage(
+                ChatMessage(
+                    id = id,
+                    role = "user",
+                    text = displayText,
+                    timestampEpochMillis = System.currentTimeMillis(),
+                    sendState = ChatSendState.Failed,
+                    sendError = "网关未连接",
+                ),
+            )
+            return@withContext
+        }
+
         appendMessage(
             ChatMessage(
                 id = id,
@@ -159,11 +191,13 @@ class OpenClawChatClient @Inject constructor(
         scope.launch {
             val key = sessionKey ?: return@launch
             val (text, attachment) = pendingSends[messageId] ?: return@launch
-            _messages.value = _messages.value.map {
-                if (it.id == messageId) {
-                    it.copy(sendState = ChatSendState.Sending, sendError = null)
-                } else {
-                    it
+            synchronized(chatLock) {
+                _messages.value = _messages.value.map {
+                    if (it.id == messageId) {
+                        it.copy(sendState = ChatSendState.Sending, sendError = null)
+                    } else {
+                        it
+                    }
                 }
             }
             sendToGateway(messageId, text, attachment, key)
@@ -202,22 +236,26 @@ class OpenClawChatClient @Inject constructor(
                     "chat",
                     "chat.send 失败（message=${displayText.take(80)}）：${error.message}",
                 )
-                _messages.value = _messages.value.map {
-                    if (it.id == id) {
-                        it.copy(
-                            sendState = ChatSendState.Failed,
-                            sendError = error.message ?: "未知错误",
-                        )
-                    } else {
-                        it
+                synchronized(chatLock) {
+                    _messages.value = _messages.value.map {
+                        if (it.id == id) {
+                            it.copy(
+                                sendState = ChatSendState.Failed,
+                                sendError = error.message ?: "未知错误",
+                            )
+                        } else {
+                            it
+                        }
                     }
                 }
             }
             .getOrNull()
         if (response != null) {
             pendingSends.remove(id)
-            _messages.value = _messages.value.map {
-                if (it.id == id) it.copy(sendState = ChatSendState.Sent) else it
+            synchronized(chatLock) {
+                _messages.value = _messages.value.map {
+                    if (it.id == id) it.copy(sendState = ChatSendState.Sent) else it
+                }
             }
             activeRunId = response.optString("runId").ifBlank { null }
             if (activeRunId != null) {
@@ -254,6 +292,8 @@ class OpenClawChatClient @Inject constructor(
                     "sessions.reset 失败：${error.message}",
                 )
             }
+            // 清空本地缓存，避免重置后回显旧消息
+            chatHistoryRepository.clearSession(key)
             loadHistory()
         }
     }
@@ -317,20 +357,26 @@ class OpenClawChatClient @Inject constructor(
                 closedFuture.complete(Unit)
                 _connected.value = false
                 _status.value = t.message ?: "连接失败"
+                // 掉线立即失败并清空等待中的请求，避免各 request() 空等 20 秒
+                failAllPending(t.message ?: "连接失败")
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 closedFuture.complete(Unit)
                 _connected.value = false
                 _status.value = "连接已关闭"
+                failAllPending("连接已关闭")
             }
         })
         try {
             socketFuture.get(10, TimeUnit.SECONDS)
         } catch (timeout: java.util.concurrent.TimeoutException) {
             webSocket?.cancel()
+            failAllPending("连接超时")
             throw timeout
         }
+        // 阻塞直到连接真正关闭（onClosed/onFailure）。OkHttp 已配 pingInterval(30s)，
+        // 半开连接会由 ping/pong 超时触发 onFailure，无需在健康连接上强加断开定时。
         closedFuture.get()
     }
 
@@ -465,15 +511,36 @@ class OpenClawChatClient @Inject constructor(
                 "chat.history",
                 JSONObject().put("sessionKey", key).put("limit", HISTORY_PAGE_SIZE),
             )
-        }.getOrNull() ?: return
+        }.getOrNull()
+        if (payload == null) {
+            // 网关未就绪/掉线时回退到本地 Room 缓存，避免空会话与离线时历史丢失
+            val cached = chatHistoryRepository.loadCached(key, HISTORY_PAGE_SIZE)
+            if (cached.isNotEmpty()) {
+                synchronized(chatLock) {
+                    _messages.value = cached
+                    runMessageIds.clear()
+                    toolCallMessageIds.clear()
+                }
+            }
+            _hasOlderMessages.value = false
+            _loadingOlder.value = false
+            historyOffset = cached.size
+            historyHasMore = false
+            return
+        }
         val messages = payload.optJSONArray("messages") ?: JSONArray()
         val parsed = mutableListOf<ChatMessage>()
         for (index in 0 until messages.length()) {
             parseMessage(messages.optJSONObject(index))?.let { parsed.add(it) }
         }
-        _messages.value = parsed
-        runMessageIds.clear()
-        toolCallMessageIds.clear()
+        // 整体替换消息列表 + 清空/重建 runId 映射需与流式事件互斥，防止交错时清掉映射
+        synchronized(chatLock) {
+            _messages.value = parsed
+            runMessageIds.clear()
+            toolCallMessageIds.clear()
+        }
+        // 把拉到的网关历史落到本地 Room 缓存（后台异步，不阻塞会话切换）
+        scope.launch { chatHistoryRepository.persistMessages(key, parsed) }
         // 记录分页游标，供"加载更早消息"使用
         historyOffset = if (payload.has("nextOffset")) payload.optInt("nextOffset") else parsed.size
         historyHasMore = payload.optBoolean("hasMore", false)
@@ -504,8 +571,10 @@ class OpenClawChatClient @Inject constructor(
                 parseMessage(messages.optJSONObject(index))?.let { older.add(it) }
             }
             if (older.isNotEmpty()) {
-                val existingIds = _messages.value.mapTo(HashSet()) { it.id }
-                _messages.value = older.filterNot { it.id in existingIds } + _messages.value
+                synchronized(chatLock) {
+                    val existingIds = _messages.value.mapTo(HashSet()) { it.id }
+                    _messages.value = older.filterNot { it.id in existingIds } + _messages.value
+                }
             }
             historyOffset = if (payload.has("nextOffset")) {
                 payload.optInt("nextOffset")
@@ -552,6 +621,7 @@ class OpenClawChatClient @Inject constructor(
             }
         }
         _sessions.value = parsed
+        scope.launch { chatHistoryRepository.persistSessions(parsed) }
     }
 
     private fun clearUnread(key: String) {
@@ -681,26 +751,50 @@ class OpenClawChatClient @Inject constructor(
         val fullText = message?.let { extractText(it.opt("content")) }.orEmpty()
 
         if (fullText.isNotBlank()) {
-            val result = reconcileChatDelta(
-                current = _messages.value,
-                runMessageIds = runMessageIds,
-                state = state,
-                runId = runId,
-                role = role,
-                fullText = fullText,
-                delta = payload.optString("deltaText"),
-                replace = payload.optBoolean("replace"),
-                nowMillis = System.currentTimeMillis(),
-            )
-            _messages.value = result.messages
-            runMessageIds.clear()
-            runMessageIds.putAll(result.runMessageIds)
+            // 读取-对账-写回 + runId 映射更新需整体落在临界区内，避免与 loadHistory/并发增量互相覆盖
+            synchronized(chatLock) {
+                val result = reconcileChatDelta(
+                    current = _messages.value,
+                    runMessageIds = runMessageIds,
+                    state = state,
+                    runId = runId,
+                    role = role,
+                    fullText = fullText,
+                    delta = payload.optString("deltaText"),
+                    replace = payload.optBoolean("replace"),
+                    nowMillis = System.currentTimeMillis(),
+                )
+                _messages.value = result.messages
+                runMessageIds.clear()
+                runMessageIds.putAll(result.runMessageIds)
+            }
         }
 
         if (terminal) {
             _isStreaming.value = false
             activeRunId = null
-            if (runId.isNotBlank()) runMessageIds.remove(runId)
+            if (runId.isNotBlank()) {
+                synchronized(chatLock) { runMessageIds.remove(runId) }
+            }
+            // 终态（final/error/aborted）后把当前会话最新消息落盘，避免流式回复在进程被杀时丢失
+            val key = sessionKey
+            if (key != null) {
+                val snapshot = _messages.value.takeLast(HISTORY_PAGE_SIZE)
+                scope.launch { chatHistoryRepository.persistMessages(key, snapshot) }
+            }
+            // 后台时把最终回复推给用户（前台由 App 内直接渲染，不发通知避免打扰）
+            if (!foregroundTracker.isForeground && fullText.isNotBlank()) {
+                val eventSessionKey = payload.optString("sessionKey").ifBlank { key }
+                val preview = fullText.take(60)
+                scope.launch {
+                    NotificationUtil.notifyChatPush(
+                        context,
+                        eventSessionKey ?: runId,
+                        "OpenClaw 回复 · " + (payload.optString("agentId").ifBlank { "agent" }),
+                        preview,
+                    )
+                }
+            }
         }
     }
 
@@ -724,28 +818,31 @@ class OpenClawChatClient @Inject constructor(
             result = if (phase == "result") toolResultToString(data) else null,
         )
 
-        val current = _messages.value
-        val messageId = toolCallMessageIds[toolCallId] ?: runMessageIds[runId]
-        val index = messageId?.let { id -> current.indexOfFirst { it.id == id } } ?: -1
+        // 工具卡片消息的「读-改-写」与映射更新需与流式文本/历史加载互斥
+        synchronized(chatLock) {
+            val current = _messages.value
+            val messageId = toolCallMessageIds[toolCallId] ?: runMessageIds[runId]
+            val index = messageId?.let { id -> current.indexOfFirst { it.id == id } } ?: -1
 
-        if (index >= 0) {
-            // 该 run 已有承载消息：更新已有工具卡片，或追加新的并行工具卡片
-            val old = current[index]
-            val hadCard = old.parts.any { it is ChatContentPart.ToolCall && it.toolCallId == toolCallId }
-            val finalParts = if (hadCard) {
-                old.parts.map { part ->
-                    if (part is ChatContentPart.ToolCall && part.toolCallId == toolCallId) card else part
+            if (index >= 0) {
+                // 该 run 已有承载消息：更新已有工具卡片，或追加新的并行工具卡片
+                val old = current[index]
+                val hadCard = old.parts.any { it is ChatContentPart.ToolCall && it.toolCallId == toolCallId }
+                val finalParts = if (hadCard) {
+                    old.parts.map { part ->
+                        if (part is ChatContentPart.ToolCall && part.toolCallId == toolCallId) card else part
+                    }
+                } else {
+                    old.parts + card
                 }
-            } else {
-                old.parts + card
+                val updated = current.toMutableList().apply { this[index] = old.copy(parts = finalParts) }
+                _messages.value = updated
+                toolCallMessageIds[toolCallId] = old.id
+                return
             }
-            val updated = current.toMutableList().apply { this[index] = old.copy(parts = finalParts) }
-            _messages.value = updated
-            toolCallMessageIds[toolCallId] = old.id
-            return
         }
 
-        // 尚无承载消息：新建一条助手消息放工具卡片
+        // 尚无承载消息：新建一条助手消息放工具卡片（appendMessage 内部已加锁，此处仅登记映射）
         val id = UUID.randomUUID().toString()
         appendMessage(
             ChatMessage(
@@ -756,8 +853,10 @@ class OpenClawChatClient @Inject constructor(
                 timestampEpochMillis = System.currentTimeMillis(),
             ),
         )
-        if (runId.isNotBlank()) runMessageIds[runId] = id
-        toolCallMessageIds[toolCallId] = id
+        if (runId.isNotBlank()) {
+            synchronized(chatLock) { runMessageIds[runId] = id }
+        }
+        synchronized(chatLock) { toolCallMessageIds[toolCallId] = id }
     }
 
     private fun toolArgumentsToString(data: JSONObject): String {
@@ -898,7 +997,9 @@ class OpenClawChatClient @Inject constructor(
     }
 
     private fun appendMessage(message: ChatMessage) {
-        _messages.value = _messages.value + message
+        synchronized(chatLock) {
+            _messages.value = _messages.value + message
+        }
     }
 
     private suspend fun request(
@@ -909,6 +1010,7 @@ class OpenClawChatClient @Inject constructor(
         val future = CompletableFuture<JSONObject>()
         pending[id] = future
         try {
+            // sendFrame 在未连接/发送失败时即抛错，request() 立即失败而不空等 20 秒
             sendFrame(method, params, id)
             // 挂起等待并支持协程取消；20 秒超时抛 TimeoutCancellationException
             return withTimeout(20_000L) {
@@ -924,12 +1026,18 @@ class OpenClawChatClient @Inject constructor(
         params: JSONObject,
         id: String = nextId.incrementAndGet().toString(),
     ) {
+        val socket = webSocket
+        if (socket == null) {
+            throw IllegalStateException("网关未连接")
+        }
         val frame = JSONObject()
             .put("type", "req")
             .put("id", id)
             .put("method", method)
             .put("params", params)
-        webSocket?.send(frame.toString())
+        if (!socket.send(frame.toString())) {
+            throw IllegalStateException("网关连接已断开，发送失败")
+        }
     }
 
     private suspend fun approveDevice(
@@ -954,12 +1062,23 @@ class OpenClawChatClient @Inject constructor(
         builder.environment()["OPENCLAW_GATEWAY_PORT"] = config.port.toString()
         builder.redirectErrorStream(true)
         val process = builder.start()
-        process.inputStream.bufferedReader().use { it.readText() }
-        process.waitFor()
+        try {
+            process.inputStream.bufferedReader().use { it.readText() }
+            // 给子进程超时，卡死时强制结束，避免协程长期驻留
+            withTimeoutOrNull(APPROVE_TIMEOUT_MS) {
+                process.waitFor()
+            }
+        } finally {
+            if (process.isAlive) {
+                process.destroyForcibly()
+            }
+        }
     }
 
     companion object {
         // chat.history 单页大小：网关侧上限 1000，这里取 50 便于增量加载
         private const val HISTORY_PAGE_SIZE = 50
+        // devices approve 子进程超时，卡死时强制结束
+        private const val APPROVE_TIMEOUT_MS = 15_000L
     }
 }

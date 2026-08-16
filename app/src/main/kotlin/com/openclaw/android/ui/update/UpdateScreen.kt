@@ -16,9 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.UpdateFailureReason
 import com.openclaw.android.model.UpdateState
 
@@ -35,55 +37,62 @@ fun UpdateScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "版本升级",
+            text = stringResource(R.string.update_screen_title),
             style = MaterialTheme.typography.headlineSmall,
         )
 
         when (val current = state) {
             UpdateState.Idle -> {
-                UpgradeCard("当前未检查更新。")
+                UpgradeCard(stringResource(R.string.update_idle))
                 Button(
                     onClick = viewModel::checkForUpdates,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("检查更新")
+                    Text(stringResource(R.string.update_check))
                 }
             }
 
             UpdateState.Checking -> {
-                UpgradeCard("正在检查 GitHub Release…")
+                UpgradeCard(stringResource(R.string.update_checking))
                 CircularProgressIndicator()
             }
 
             UpdateState.UpToDate -> {
-                UpgradeCard("当前已是最新版本。")
+                UpgradeCard(stringResource(R.string.update_up_to_date))
                 Button(
                     onClick = viewModel::checkForUpdates,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("重新检查")
+                    Text(stringResource(R.string.update_recheck))
                 }
             }
 
             is UpdateState.Available -> {
                 UpgradeCard(
-                    "发现新版本 ${current.latestVersion}\n" +
-                        "当前版本：${current.currentVersion}\n" +
-                        "下载大小：${formatBytes(current.downloadSizeBytes)}\n\n" +
+                    stringResource(
+                        R.string.update_available,
+                        current.latestVersion,
+                        current.currentVersion,
+                        formatBytes(current.downloadSizeBytes),
                         current.releaseNotes,
+                    ),
                 )
                 Button(
                     onClick = viewModel::download,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("下载")
+                    Text(stringResource(R.string.update_download))
                 }
             }
 
             is UpdateState.Downloading -> {
                 UpgradeCard(
-                    "正在下载 ${current.version}：${formatBytes(current.receivedBytes)} / " +
+                    stringResource(
+                        R.string.update_downloading,
+                        current.version,
+                        formatBytes(current.receivedBytes),
                         formatBytes(current.totalBytes),
+                    ),
                 )
                 LinearProgressIndicator(
                     progress = { current.percent },
@@ -92,51 +101,60 @@ fun UpdateScreen(
             }
 
             is UpdateState.Verifying -> {
-                UpgradeCard("正在校验 ${current.version} 的 SHA256。")
+                UpgradeCard(stringResource(R.string.update_verifying, current.version))
                 CircularProgressIndicator()
             }
 
             is UpdateState.ReadyToInstall -> {
-                UpgradeCard("${current.version} 已下载并校验完成，可以安装。")
+                UpgradeCard(stringResource(R.string.update_ready, current.version))
                 Button(
                     onClick = viewModel::install,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("安装并重启")
+                    Text(stringResource(R.string.update_install_restart))
                 }
             }
 
             is UpdateState.Installing -> {
-                val mode = if (current.rollback) "回滚" else "安装"
-                UpgradeCard("正在$mode ${current.toVersion}。")
+                UpgradeCard(
+                    if (current.rollback) {
+                        stringResource(R.string.update_installing_rollback, current.toVersion)
+                    } else {
+                        stringResource(R.string.update_installing, current.toVersion)
+                    },
+                )
                 CircularProgressIndicator()
             }
 
             is UpdateState.RestartingGateway -> {
-                UpgradeCard("新版本已切换，正在等待网关健康检查：${current.version}")
+                UpgradeCard(stringResource(R.string.update_restarting, current.version))
                 CircularProgressIndicator()
             }
 
             is UpdateState.Completed -> {
                 UpgradeCard(
                     if (current.rollback) {
-                        "已回滚到 ${current.version}。"
+                        stringResource(R.string.update_completed_rollback, current.version)
                     } else {
-                        "升级完成：${current.version}。"
+                        stringResource(R.string.update_completed, current.version)
                     },
                 )
                 OutlinedButton(
                     onClick = viewModel::reset,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("完成")
+                    Text(stringResource(R.string.update_done))
                 }
             }
 
             is UpdateState.Failed -> {
                 UpgradeCard(
-                    "更新失败（${failureLabel(current.reason)}）：${current.message}\n" +
-                        "当前版本：${current.activeVersion}",
+                    stringResource(
+                        R.string.update_failed,
+                        failureLabel(current.reason),
+                        current.message,
+                        current.activeVersion,
+                    ),
                 )
                 Row {
                     Button(
@@ -144,20 +162,20 @@ fun UpdateScreen(
                         enabled = current.canRetry,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("重试")
+                        Text(stringResource(R.string.common_retry))
                     }
                     OutlinedButton(
                         onClick = viewModel::reset,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("取消")
+                        Text(stringResource(R.string.common_cancel))
                     }
                     if (current.rollbackVersion != null) {
                         Button(
                             onClick = viewModel::rollback,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("回滚")
+                            Text(stringResource(R.string.update_rollback))
                         }
                     }
                 }
@@ -177,14 +195,15 @@ private fun UpgradeCard(text: String) {
     }
 }
 
+@Composable
 private fun failureLabel(reason: UpdateFailureReason): String = when (reason) {
-    UpdateFailureReason.Network -> "网络错误"
-    UpdateFailureReason.ChecksumMismatch -> "SHA256 校验失败"
-    UpdateFailureReason.InsufficientSpace -> "存储空间不足"
-    UpdateFailureReason.ExtractFailed -> "解压失败"
-    UpdateFailureReason.GatewayHealthCheckFailed -> "网关健康检查失败"
-    UpdateFailureReason.RollbackFailed -> "回滚失败"
-    UpdateFailureReason.Unknown -> "未知错误"
+    UpdateFailureReason.Network -> stringResource(R.string.update_fail_network)
+    UpdateFailureReason.ChecksumMismatch -> stringResource(R.string.update_fail_checksum)
+    UpdateFailureReason.InsufficientSpace -> stringResource(R.string.update_fail_space)
+    UpdateFailureReason.ExtractFailed -> stringResource(R.string.update_fail_extract)
+    UpdateFailureReason.GatewayHealthCheckFailed -> stringResource(R.string.update_fail_health)
+    UpdateFailureReason.RollbackFailed -> stringResource(R.string.update_fail_rollback)
+    UpdateFailureReason.Unknown -> stringResource(R.string.update_fail_unknown)
 }
 
 private fun formatBytes(bytes: Long): String {

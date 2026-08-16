@@ -1,13 +1,15 @@
-﻿package com.openclaw.android.util
+package com.openclaw.android.util
 
 /**
  * Compares dotted version strings that may carry numeric or prerelease suffixes,
  * such as "2026.7.1" vs "2026.7.1-2" or "1.0.0-rc1".
  *
- * Numeric suffixes (e.g. "-2", "+build5") are parsed as an extra numeric
- * component, so "2026.7.1-3" > "2026.7.1-2" > "2026.7.1". Non-numeric segments
- * (e.g. "beta") are treated as 0 so they never crash the comparison; they sort
- * below any numeric suffix of the same base version.
+ * 后缀段（-/+ 分隔）按尾随数字取优先级：整段纯数字（如 "-2"）或末尾带数字
+ * （如 "+build5"→5、"rc1"→1）都取该数字作为额外数值分量，因此
+ * "2026.7.1-3" > "2026.7.1-2" > "2026.7.1"，"+build5" > "+build3"。
+ * 无尾随数字的段（如 "beta"）取 0，故其排在同基数的任何数字后缀之下。
+ * 注意：预发布名与纯数字 build 号可能取到相同分量而比较相等（如 "rc1" 与 "-1"），
+ * 本项目打包的 OpenClaw 版本均使用纯数字后缀（"-N"/"+buildN"），不受此影响。
  */
 internal object VersionUtil {
     fun compare(left: String, right: String): Int {

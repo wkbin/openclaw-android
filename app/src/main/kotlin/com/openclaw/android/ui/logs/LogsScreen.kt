@@ -36,9 +36,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.LogEntry
 import com.openclaw.android.model.LogLevel
 
@@ -67,7 +69,7 @@ fun LogsScreen(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("日志") },
+                title = { Text(stringResource(R.string.logs_title)) },
                 actions = {
                     IconButton(
                         onClick = {
@@ -76,30 +78,30 @@ fun LogsScreen(
                             }
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard.setPrimaryClip(ClipData.newPlainText("OpenClaw logs", text))
-                            Toast.makeText(context, "已复制全部日志", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, context.getString(R.string.logs_copy_all_toast), Toast.LENGTH_LONG).show()
                         },
                     ) {
-                        Icon(Icons.Outlined.ContentCopy, contentDescription = "复制日志")
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.common_copy_log))
                     }
                     IconButton(
                         onClick = {
                             viewModel.clearMemory()
                         },
                     ) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "清空内存日志")
+                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.logs_clear_cd))
                     }
                     IconButton(
                         onClick = {
                             viewModel.export { file ->
                                 Toast.makeText(
                                     context,
-                                    "日志已导出：${file.absolutePath}",
+                                    context.getString(R.string.logs_exported, file.absolutePath),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
                         },
                     ) {
-                        Icon(Icons.Outlined.Share, contentDescription = "导出日志")
+                        Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.logs_export_cd))
                     }
                 },
             )
@@ -119,7 +121,7 @@ fun LogsScreen(
                 FilterChip(
                     selected = selectedLevel == null,
                     onClick = { selectedLevel = null },
-                    label = { Text("全部") },
+                    label = { Text(stringResource(R.string.logs_filter_all)) },
                 )
                 FilterChip(
                     selected = selectedLevel == LogLevel.Info,
@@ -139,7 +141,7 @@ fun LogsScreen(
                 FilterChip(
                     selected = autoScroll,
                     onClick = { autoScroll = !autoScroll },
-                    label = { Text(if (autoScroll) "自动滚动" else "已暂停") },
+                    label = { Text(if (autoScroll) stringResource(R.string.logs_auto_scroll) else stringResource(R.string.logs_paused)) },
                 )
             }
 

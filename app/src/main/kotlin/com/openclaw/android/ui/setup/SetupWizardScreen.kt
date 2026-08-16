@@ -69,6 +69,8 @@ import androidx.core.app.ActivityCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.openclaw.android.R
 import com.openclaw.android.model.ApiKeys
 import com.openclaw.android.model.GatewayConfig
 import com.openclaw.android.model.ModelCatalog
@@ -175,7 +177,7 @@ fun SetupWizardScreen(
                         onClick = { step -= 1 },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("上一步")
+                        Text(stringResource(R.string.setup_previous))
                     }
                 }
                 if (step < 2) {
@@ -183,14 +185,14 @@ fun SetupWizardScreen(
                         onClick = { step += 1 },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("下一步")
+                        Text(stringResource(R.string.setup_next))
                     }
                 } else {
                     Button(
                         onClick = { viewModel.finish(draft) },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text("开始使用")
+                        Text(stringResource(R.string.setup_start))
                     }
                 }
             }
@@ -230,7 +232,7 @@ private fun SetupTopBar(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "首次配置",
+                text = stringResource(R.string.setup_first_config),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -238,7 +240,7 @@ private fun SetupTopBar(
         Spacer(Modifier.weight(1f))
         if (step < 2) {
             TextButton(onClick = onSkip) {
-                Text("跳过")
+                Text(stringResource(R.string.setup_skip))
             }
         }
     }
@@ -271,9 +273,9 @@ private fun SetupStepIndicator(step: Int) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = when (index) {
-                        0 -> "欢迎"
-                        1 -> "模型厂商"
-                        else -> "完成"
+                        0 -> stringResource(R.string.setup_step_welcome)
+                        1 -> stringResource(R.string.setup_step_models)
+                        else -> stringResource(R.string.setup_step_done)
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (active) {
@@ -323,13 +325,13 @@ private fun WelcomeStep() {
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            text = "欢迎使用 OpenClaw",
+            text = stringResource(R.string.setup_welcome_title),
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "一个内置于 Android 的 OpenClaw 网关，完成简单配置后即可在聊天页使用 Control UI。",
+            text = stringResource(R.string.setup_welcome_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -341,20 +343,20 @@ private fun WelcomeStep() {
         ) {
             FeatureTile(
                 icon = Icons.Outlined.RocketLaunch,
-                title = "开箱即用",
-                subtitle = "内置网关",
+                title = stringResource(R.string.setup_feature_ready),
+                subtitle = stringResource(R.string.setup_feature_ready_sub),
                 modifier = Modifier.weight(1f),
             )
             FeatureTile(
                 icon = Icons.Outlined.AutoAwesome,
-                title = "多模型",
-                subtitle = "主流厂商",
+                title = stringResource(R.string.setup_feature_multi),
+                subtitle = stringResource(R.string.setup_feature_multi_sub),
                 modifier = Modifier.weight(1f),
             )
             FeatureTile(
                 icon = Icons.Outlined.Lock,
-                title = "本地加密",
-                subtitle = "Key 仅本机",
+                title = stringResource(R.string.setup_feature_encrypt),
+                subtitle = stringResource(R.string.setup_feature_encrypt_sub),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -438,18 +440,22 @@ private fun ModelsStep(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "模型厂商",
+                    text = stringResource(R.string.setup_models_title),
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
-                    text = "选择厂商和默认模型，再填入 API Key",
+                    text = stringResource(R.string.setup_models_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (configuredCount > 0) {
                 Text(
-                    text = "已配置 $configuredCount/${ModelCatalog.providers.size} 个",
+                    text = stringResource(
+                        R.string.setup_configured_count,
+                        configuredCount,
+                        ModelCatalog.providers.size,
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = ConfiguredGreen,
                 )
@@ -467,11 +473,11 @@ private fun ModelsStep(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "1. 选择厂商",
+                    text = stringResource(R.string.setup_step1_vendor),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 DropdownField(
-                    label = "模型厂商",
+                    label = stringResource(R.string.setup_vendor_label),
                     selected = provider?.name ?: "",
                     options = ModelCatalog.providers.map { it.name },
                     onSelect = { name ->
@@ -481,12 +487,12 @@ private fun ModelsStep(
                     },
                 )
                 Text(
-                    text = "2. 选择默认模型",
+                    text = stringResource(R.string.setup_step2_model),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 provider?.let { current ->
                     DropdownField(
-                        label = "默认模型",
+                        label = stringResource(R.string.setup_default_model_label),
                         selected = selectedModel?.name ?: "",
                         options = current.models.map { it.name },
                         onSelect = { modelName ->
@@ -513,7 +519,7 @@ private fun ModelsStep(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        text = "3. 填入 ${current.name} API Key",
+                        text = stringResource(R.string.setup_step3_key, current.name),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     OutlinedTextField(
@@ -524,7 +530,7 @@ private fun ModelsStep(
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("${current.name} API Key") },
+                        label = { Text(stringResource(R.string.setup_api_key_for, current.name)) },
                         placeholder = { Text("sk-...") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
@@ -535,7 +541,7 @@ private fun ModelsStep(
         }
 
         Text(
-            text = "提示：填好当前厂商的 Key 即可开始使用；其他厂商和默认模型可在设置页随时修改。",
+            text = stringResource(R.string.setup_models_tip),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -570,12 +576,12 @@ private fun DoneStep(
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "准备就绪",
+            text = stringResource(R.string.setup_done_title),
             style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "点击「开始使用」进入主界面并启动网关",
+            text = stringResource(R.string.setup_done_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -594,7 +600,7 @@ private fun DoneStep(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
-                    text = "配置摘要",
+                    text = stringResource(R.string.setup_config_summary),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Spacer(Modifier.height(2.dp))
@@ -602,20 +608,24 @@ private fun DoneStep(
                     val configured = setupKeyValue(draft.apiKeys, p.id).isNotBlank()
                     SummaryRow(
                         label = p.name,
-                        detail = if (configured) "已配置" else "未配置",
+                        detail = if (configured) {
+                            stringResource(R.string.common_configured)
+                        } else {
+                            stringResource(R.string.common_not_configured)
+                        },
                         ok = configured,
                     )
                 }
                 if (draft.apiKeys.custom.isNotEmpty()) {
                     SummaryRow(
-                        label = "自定义",
-                        detail = "${draft.apiKeys.custom.size} 个",
+                        label = stringResource(R.string.setup_summary_custom),
+                        detail = stringResource(R.string.setup_custom_count, draft.apiKeys.custom.size),
                         ok = true,
                     )
                 }
                 SummaryRow(
-                    label = "默认模型",
-                    detail = draft.defaultModel.ifBlank { "未设置" },
+                    label = stringResource(R.string.setup_default_model),
+                    detail = draft.defaultModel.ifBlank { stringResource(R.string.setup_not_set) },
                     ok = draft.defaultModel.isNotBlank(),
                 )
             }
@@ -643,12 +653,12 @@ private fun DoneStep(
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "通知权限未开启",
+                            text = stringResource(R.string.setup_notification_denied_title),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            text = "开启后可在通知栏查看网关运行状态",
+                            text = stringResource(R.string.setup_notification_denied_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -660,7 +670,13 @@ private fun DoneStep(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
-                    Text(if (permanentlyDenied) "去系统设置开启" else "重新申请权限")
+                    Text(
+                        if (permanentlyDenied) {
+                            stringResource(R.string.setup_notification_open_settings)
+                        } else {
+                            stringResource(R.string.setup_notification_request_again)
+                        },
+                    )
                 }
             }
         }

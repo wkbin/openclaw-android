@@ -57,14 +57,17 @@ class LogRepository @Inject constructor(
     }
 
     suspend fun exportLogs(): File = withContext(Dispatchers.IO) {
-        val source = logFileFor(LocalDate.now())
-        if (!source.exists()) {
-            source.parentFile?.mkdirs()
-            source.writeText("")
+        // 与 append 的落盘写入共享锁，避免导出的是写入到一半的不完整行
+        mutex.withLock {
+            val source = logFileFor(LocalDate.now())
+            if (!source.exists()) {
+                source.parentFile?.mkdirs()
+                source.writeText("")
+            }
+            val exported = File(context.cacheDir, "openclaw-logs-${System.currentTimeMillis()}.txt")
+            source.copyTo(exported, overwrite = true)
+            exported
         }
-        val exported = File(context.cacheDir, "openclaw-logs-${System.currentTimeMillis()}.txt")
-        source.copyTo(exported, overwrite = true)
-        exported
     }
 
     private fun appendToFile(entry: LogEntry) {
@@ -86,8 +89,12 @@ class LogRepository @Inject constructor(
     }
 
     private fun pruneOldLogs() {
+        // 只在日期变化时清理一次，避免每条日志都做目录遍历与文件名日期解析
+        val today = LocalDate.now()
+        if (today == lastPrunedDate) return
+        lastPrunedDate = today
         val dir = File(context.filesDir, "logs").apply { mkdirs() }
-        val cutoff = LocalDate.now().minusDays(LOG_RETENTION_DAYS)
+        val cutoff = today.minusDays(LOG_RETENTION_DAYS)
         dir.listFiles()
             ?.filter { it.isFile && it.name.startsWith("gateway-") }
             ?.forEach { file ->
@@ -105,5 +112,7 @@ class LogRepository @Inject constructor(
         const val MAX_MEMORY_ENTRIES = 500
         const val LOG_RETENTION_DAYS = 7L
         val LOG_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        // 上次清理日志的日期，避免每条 append 都触发目录扫描
+        var lastPrunedDate: LocalDate? = null
     }
 }

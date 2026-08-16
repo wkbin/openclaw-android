@@ -13,13 +13,16 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import java.io.IOException
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 
 @Singleton
 class SettingsRepository @Inject constructor(
@@ -41,6 +44,8 @@ class SettingsRepository @Inject constructor(
         .map { preferences ->
             decodeStored(preferences[configKey])
         }
+        // Keystore 解密（decodeStored 内）放到 IO，避免订阅方（如 UI）在主线程做系统级解密阻塞
+        .flowOn(Dispatchers.IO)
 
     suspend fun updateConfig(transform: (GatewayConfig) -> GatewayConfig) {
         dataStore.edit { preferences ->
@@ -73,6 +78,8 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setThemeMode(mode: String) = updateConfig { it.copy(themeMode = mode) }
 
+    suspend fun setLinuxMode(enabled: Boolean) = updateConfig { it.copy(linuxMode = enabled) }
+
     suspend fun setUiScale(scale: Float) = updateConfig { it.copy(uiScale = scale) }
 
     suspend fun setSetupCompleted(completed: Boolean = true) = updateConfig {
@@ -85,15 +92,33 @@ class SettingsRepository @Inject constructor(
         val bytes = ByteArray(18)
         SecureRandom().nextBytes(bytes)
         val token = "oc-" + bytes.joinToString("") { "%02x".format(it) }
-        updateConfig { it.copy(gatewayToken = token) }
-        return token
+        // DataStore 串行化并发的 edit 事务：这里在 transform 内"若已有人写入则复用"，
+        // 保证即便两个调用并发，最终也只有一个 token 落盘。
+        updateConfig { current ->
+            if (current.gatewayToken.isNotBlank()) {
+                current
+            } else {
+                current.copy(gatewayToken = token)
+            }
+        }
+        // 写回后以实际落盘值为准，避免并发窗口内其他调用已写入不同 token 时返回错误值
+        return config.first().gatewayToken.ifBlank { token }
     }
 
     private fun decodeStored(stored: String?): GatewayConfig {
         if (stored.isNullOrBlank()) return GatewayConfig()
-        val dto = runCatching { json.decodeFromString<StoredGatewayConfig>(stored) }.getOrNull()
-        if (dto != null) {
-            // 识别为加密格式；版本不匹配时不解析，避免静默得到错误数据
+        // 显式按字段区分加密/明文格式：加密格式含 apiKeysEnc/gatewayTokenEnc（versioned DTO），
+        // 明文只含 apiKeys/gatewayToken。之前"看 decodeFromString 能否成功"会把明文也当作
+        // StoredGatewayConfig 解码成功（ignoreUnknownKeys 忽略未知键），导致版本校验不通过、
+        // 明文兜底分支永远走不到、旧版明文数据被静默丢弃。
+        val isEncrypted = runCatching {
+            val obj = json.parseToJsonElement(stored).jsonObject
+            obj.containsKey("apiKeysEnc") || obj.containsKey("gatewayTokenEnc")
+        }.getOrDefault(false)
+        if (isEncrypted) {
+            val dto = runCatching { json.decodeFromString<StoredGatewayConfig>(stored) }.getOrNull()
+                ?: return GatewayConfig()
+            // 版本不匹配时不解析，避免静默得到错误数据；同时因是加密格式，无法做字段级迁移
             return if (dto.version == STORAGE_VERSION) dto.toGatewayConfig() else GatewayConfig()
         }
         // 旧版明文配置：直接读取，下次写入时自动迁移为加密存储
@@ -125,6 +150,7 @@ class SettingsRepository @Inject constructor(
             defaultModel = config.defaultModel,
             githubOwner = config.githubOwner,
             githubRepo = config.githubRepo,
+            linuxMode = config.linuxMode,
         )
         return json.encodeToString(StoredGatewayConfig.serializer(), dto)
     }
@@ -157,6 +183,7 @@ class SettingsRepository @Inject constructor(
             defaultModel = defaultModel,
             githubOwner = githubOwner,
             githubRepo = githubRepo,
+            linuxMode = linuxMode,
         )
     }
 
@@ -182,4 +209,5 @@ private data class StoredGatewayConfig(
     val defaultModel: String = "deepseek/deepseek-v4-flash",
     val githubOwner: String = "openclaw",
     val githubRepo: String = "openclaw",
+    val linuxMode: Boolean = false,
 )

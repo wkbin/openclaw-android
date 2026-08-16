@@ -50,6 +50,7 @@ object CrashLogger {
         writeText(context, content)
     }
 
+    @Synchronized
     private fun writeText(context: Context, content: String) {
         runCatching {
             val file = crashFile(context)

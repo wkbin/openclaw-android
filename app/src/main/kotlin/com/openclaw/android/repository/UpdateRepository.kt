@@ -48,6 +48,10 @@ class UpdateRepository @Inject constructor(
     private var pendingToVersion: String? = null
 
     suspend fun checkForUpdates(owner: String, repo: String) = mutex.withLock {
+        // 进入新的检查轮次前清掉上一轮残留的下载/安装状态，避免状态机跨轮污染
+        pendingArchive = null
+        pendingFromVersion = null
+        pendingToVersion = null
         _state.value = UpdateState.Checking
         val currentVersion = activeVersion()
         try {
@@ -262,8 +266,17 @@ class UpdateRepository @Inject constructor(
         try {
             withContext(Dispatchers.IO) {
                 val root = openclawRoot()
+                val oldDir = File(File(root, "versions"), fromVersion)
+                if (!oldDir.isDirectory) {
+                    throw IOException("要回滚的版本目录不存在：$fromVersion")
+                }
                 FileUtil.atomicWriteText(File(root, "current-version"), fromVersion)
                 settingsRepository.setLastVersion(fromVersion)
+                // 回滚成功后清理失败的"新"版本目录，避免长期占用磁盘；若有备份也一并清理
+                val newDir = File(File(root, "versions"), toVersion)
+                if (newDir.exists()) FileUtil.deleteRecursively(newDir)
+                val backup = File(File(root, "backups"), fromVersion)
+                if (backup.exists()) FileUtil.deleteRecursively(backup)
             }
             _state.value = UpdateState.RestartingGateway(fromVersion)
         } catch (error: Exception) {
@@ -345,42 +358,63 @@ class UpdateRepository @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         partFile.parentFile?.mkdirs()
         var offset = partFile.length()
-        val requestBuilder = Request.Builder().url(url)
-        if (offset > 0L) {
-            requestBuilder.header("Range", "bytes=$offset-")
+        // 断点续传时上次已把 .part 写满（等于完整大小）但未 rename 完成：此时若仍发
+        // Range 请求会拿到 416 并永久失败，这里直接视为已下载完成交由校验阶段处理。
+        if (expectedTotal > 0L && offset >= expectedTotal) {
+            _state.value = UpdateState.Downloading(
+                version = version,
+                receivedBytes = expectedTotal,
+                totalBytes = expectedTotal,
+            )
+            return@withContext
         }
 
-        client.newCall(requestBuilder.build()).execute().use { response ->
-            if (!response.isSuccessful && response.code != 206) {
-                throw IOException("下载响应 ${response.code}")
+        while (true) {
+            val requestBuilder = Request.Builder().url(url)
+            if (offset > 0L) {
+                requestBuilder.header("Range", "bytes=$offset-")
             }
-            val body = response.body
-            val append = response.code == 206 && offset > 0L
-            if (!append) {
-                offset = 0L
-                partFile.delete()
-            }
-            val total = if (expectedTotal > 0L) expectedTotal
-                else (body.contentLength() + offset).coerceAtLeast(1L)
+            val response = client.newCall(requestBuilder.build()).execute()
+            response.use {
+                if (it.code == 416) {
+                    // .part 已比预期大或服务器不认该 Range：删掉按全量重新下载
+                    offset = 0L
+                    partFile.delete()
+                    return@use
+                }
+                if (!it.isSuccessful && it.code != 206) {
+                    throw IOException("下载响应 ${it.code}")
+                }
+                val body = it.body
+                val append = it.code == 206 && offset > 0L
+                if (!append) {
+                    offset = 0L
+                    partFile.delete()
+                }
+                val total = if (expectedTotal > 0L) expectedTotal
+                    else (body.contentLength() + offset).coerceAtLeast(1L)
 
-            FileOutputStream(partFile, append).use { output ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var read = input.read(buffer)
-                    while (read >= 0) {
-                        if (read > 0) {
-                            output.write(buffer, 0, read)
-                            offset += read
-                            _state.value = UpdateState.Downloading(
-                                version = version,
-                                receivedBytes = offset,
-                                totalBytes = total,
-                            )
+                FileOutputStream(partFile, append).use { output ->
+                    body.byteStream().use { input ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var read = input.read(buffer)
+                        while (read >= 0) {
+                            if (read > 0) {
+                                output.write(buffer, 0, read)
+                                offset += read
+                                _state.value = UpdateState.Downloading(
+                                    version = version,
+                                    receivedBytes = offset,
+                                    totalBytes = total,
+                                )
+                            }
+                            read = input.read(buffer)
                         }
-                        read = input.read(buffer)
                     }
                 }
+                return@withContext
             }
+            // 416 清空后重试下一轮（不带 Range 全量下载）
         }
     }
 

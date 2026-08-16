@@ -63,12 +63,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.ApiKeys
 import com.openclaw.android.model.GatewayConfig
 import com.openclaw.android.model.ModelCatalog
@@ -148,12 +150,18 @@ internal fun ModelsScreen(
         draft = draft.copy(defaultModel = "${spec.id}/$id")
     }
 
+    val customNameEmptyError = stringResource(R.string.models_error_empty_name)
+    val customNameBuiltinError = stringResource(R.string.models_error_builtin)
+    val customNameDuplicateError = stringResource(R.string.models_error_duplicate)
+
     val addCustomProvider: () -> Unit = {
         val name = customName.trim()
         when {
-            name.isEmpty() -> customNameError = "请输入供应商名称"
-            name in BuiltinIds -> customNameError = "“$name” 是内置供应商，请换个名称"
-            draft.apiKeys.custom.containsKey(name) -> customNameError = "供应商“$name”已存在"
+            name.isEmpty() -> customNameError = customNameEmptyError
+            name in BuiltinIds ->
+                customNameError = String.format(customNameBuiltinError, name)
+            draft.apiKeys.custom.containsKey(name) ->
+                customNameError = String.format(customNameDuplicateError, name)
             else -> {
                 draft = draft.copy(
                     apiKeys = draft.apiKeys.copy(
@@ -172,17 +180,21 @@ internal fun ModelsScreen(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("模型") },
+                title = { Text(stringResource(R.string.settings_models)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showKeys = !showKeys }) {
                         Icon(
                             imageVector = if (showKeys) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                            contentDescription = if (showKeys) "隐藏密钥" else "显示密钥",
+                            contentDescription = if (showKeys) {
+                                stringResource(R.string.models_hide_keys_cd)
+                            } else {
+                                stringResource(R.string.models_show_keys_cd)
+                            },
                         )
                     }
                 },
@@ -199,7 +211,7 @@ internal fun ModelsScreen(
             item {
                 SettingsGroup {
                     Text(
-                        text = "每张卡片对应一个模型厂商。已配置 API Key 后即可「设为默认」，点击卡片可展开修改模型和密钥。",
+                        text = stringResource(R.string.models_help_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
@@ -208,17 +220,18 @@ internal fun ModelsScreen(
             }
 
             item {
-                SectionTitle("模型列表")
+                SectionTitle(stringResource(R.string.models_list_section))
             }
 
             items(providers, key = { specKeyOf(it) }) { spec ->
                 val provider = ModelCatalog.providers.firstOrNull { it.id == spec.id }
                 val modelId = modelIdFor(spec)
                 val subtitle = if (spec.builtin && provider != null) {
-                    provider.models.firstOrNull { it.id == modelId }?.name?.let { "模型：$it" }
-                        ?: "未选择模型"
+                    provider.models.firstOrNull { it.id == modelId }?.name?.let {
+                        stringResource(R.string.models_model_subtitle, it)
+                    } ?: stringResource(R.string.models_no_model_selected)
                 } else {
-                    modelId.ifBlank { "自定义供应商" }
+                    modelId.ifBlank { stringResource(R.string.models_custom_provider) }
                 }
                 val modelOptions =
                     if (spec.builtin && provider != null) provider.models.map { it.id to it.name }
@@ -250,7 +263,7 @@ internal fun ModelsScreen(
             }
 
             item {
-                SectionTitle("添加自定义供应商")
+                SectionTitle(stringResource(R.string.models_add_provider_section))
                 SettingsGroup {
                     OutlinedTextField(
                         value = customName,
@@ -258,7 +271,7 @@ internal fun ModelsScreen(
                             customName = value
                             customNameError = null
                         },
-                        label = { Text("供应商名称") },
+                        label = { Text(stringResource(R.string.models_provider_name)) },
                         singleLine = true,
                         isError = customNameError != null,
                         supportingText = customNameError?.let { error ->
@@ -271,7 +284,7 @@ internal fun ModelsScreen(
                     OutlinedTextField(
                         value = customKey,
                         onValueChange = { customKey = it },
-                        label = { Text("API Key（可选，稍后可补）") },
+                        label = { Text(stringResource(R.string.models_api_key_optional)) },
                         singleLine = true,
                         visualTransformation = if (showKeys) {
                             VisualTransformation.None
@@ -295,18 +308,18 @@ internal fun ModelsScreen(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("添加供应商")
+                        Text(stringResource(R.string.models_add_provider))
                     }
                 }
             }
 
             item {
-                SectionTitle("默认模型")
+                SectionTitle(stringResource(R.string.models_default_model_section))
                 SettingsGroup {
                     OutlinedTextField(
                         value = draft.defaultModel,
                         onValueChange = { draft = draft.copy(defaultModel = it) },
-                        label = { Text("手动输入模型 ID（如 openai/gpt-4o）") },
+                        label = { Text(stringResource(R.string.models_manual_model_id)) },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -330,7 +343,7 @@ internal fun ModelsScreen(
                         modifier = Modifier.size(14.dp),
                     )
                     Text(
-                        text = "API Key 使用系统级加密存储在本机，不会上传。",
+                        text = stringResource(R.string.models_key_note),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -338,19 +351,21 @@ internal fun ModelsScreen(
             }
 
             item {
+                // 资源解析必须在可组合作用域内进行（onClick 回调不是 @Composable 上下文）
+                val defaultModelErrorTemplate = stringResource(R.string.models_error_default_model)
                 Button(
                     onClick = {
-                        val error = validateDefaultModel(draft)
+                        val error = validateDefaultModel(draft, defaultModelErrorTemplate)
                         if (error != null) {
                             Toast.makeText(context, error, Toast.LENGTH_LONG).show()
                         } else {
                             viewModel.updateConfig(draft)
-                            Toast.makeText(context, "模型配置已保存", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.models_saved_toast), Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("保存模型配置")
+                    Text(stringResource(R.string.models_save_config))
                 }
             }
         }
@@ -445,7 +460,7 @@ private fun ModelCard(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                     ) {
                         Text(
-                            text = "当前",
+                            text = stringResource(R.string.models_current),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -453,21 +468,25 @@ private fun ModelCard(
                     }
                 } else if (configured) {
                     TextButton(onClick = onSetDefault) {
-                        Text("设为默认")
+                        Text(stringResource(R.string.models_set_default))
                     }
                 }
                 if (canRemove) {
                     IconButton(onClick = onRemove) {
                         Icon(
                             Icons.Outlined.Delete,
-                            contentDescription = "移除 $name",
+                            contentDescription = stringResource(R.string.models_remove_cd, name),
                             tint = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "收起" else "展开",
+                    contentDescription = if (expanded) {
+                        stringResource(R.string.models_collapse_cd)
+                    } else {
+                        stringResource(R.string.models_expand_cd)
+                    },
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -481,7 +500,7 @@ private fun ModelCard(
                         val selectedName =
                             modelOptions.firstOrNull { it.first == selectedModelId }?.second ?: ""
                         DropdownField(
-                            label = "选择模型",
+                            label = stringResource(R.string.models_select_model),
                             selected = selectedName,
                             options = modelOptions.map { it.second },
                             onSelect = { modelName ->
@@ -494,8 +513,8 @@ private fun ModelCard(
                         OutlinedTextField(
                             value = selectedModelId,
                             onValueChange = onSelectModel,
-                            label = { Text("模型 ID") },
-                            placeholder = { Text("如 openai/gpt-4o") },
+                            label = { Text(stringResource(R.string.models_model_id)) },
+                            placeholder = { Text(stringResource(R.string.models_model_id_placeholder)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -503,7 +522,7 @@ private fun ModelCard(
                     OutlinedTextField(
                         value = keyValue,
                         onValueChange = onKeyChange,
-                        label = { Text("API Key") },
+                        label = { Text(stringResource(R.string.models_api_key_label)) },
                         placeholder = { Text("sk-...") },
                         singleLine = true,
                         visualTransformation = if (showKeys) {
@@ -516,9 +535,9 @@ private fun ModelCard(
                     )
                     Text(
                         text = if (configured) {
-                            "已配置 API Key，可修改后保存。"
+                            stringResource(R.string.models_configured_hint)
                         } else {
-                            "尚未配置，输入 API Key 后保存，即可设为默认。"
+                            stringResource(R.string.models_not_configured_hint)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -553,7 +572,11 @@ private fun StatusBadge(configured: Boolean) {
                     ),
             )
             Text(
-                text = if (configured) "已配置" else "未配置",
+                text = if (configured) {
+                    stringResource(R.string.common_configured)
+                } else {
+                    stringResource(R.string.common_not_configured)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = if (configured) {
                     ConfiguredGreen
@@ -595,10 +618,10 @@ private fun setKey(keys: ApiKeys, spec: ProviderSpec, value: String): ApiKeys {
     }
 }
 
-private fun validateDefaultModel(config: GatewayConfig): String? {
+private fun validateDefaultModel(config: GatewayConfig, errorTemplate: String): String? {
     val model = config.defaultModel
     if (model.isBlank()) return null
     val provider = model.substringBefore('/')
     val hasKey = apiKeyFor(config.apiKeys, provider).isNotBlank()
-    return if (hasKey) null else "默认模型对应的供应商「$provider」尚未配置 API Key，请先在上方填写"
+    return if (hasKey) null else String.format(errorTemplate, provider)
 }

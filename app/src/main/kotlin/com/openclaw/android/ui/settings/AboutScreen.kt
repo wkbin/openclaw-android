@@ -31,10 +31,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openclaw.android.BuildConfig
+import com.openclaw.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,10 +53,10 @@ import com.openclaw.android.BuildConfig
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("关于与支持") },
+                title = { Text(stringResource(R.string.settings_about)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -68,31 +70,31 @@ import com.openclaw.android.BuildConfig
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                SectionTitle("应用信息")
+                SectionTitle(stringResource(R.string.about_section_info))
                 SettingsGroup {
                     Text(
                         text = "OpenClaw Android",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = "应用版本 ${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）",
+                        text = stringResource(R.string.about_app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "内置网关 ${BuildConfig.OPENCLAW_VERSION}",
+                        text = stringResource(R.string.about_bundled_gateway, BuildConfig.OPENCLAW_VERSION),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "当前网关 ${config.lastVersion}",
+                        text = stringResource(R.string.about_current_gateway, config.lastVersion),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             item {
-                SectionTitle("项目地址")
+                SectionTitle(stringResource(R.string.about_section_project))
                 SettingsGroup {
                     Text(
                         text = repoUrl,
@@ -107,11 +109,11 @@ import com.openclaw.android.BuildConfig
                             onClick = {
                                 val clipboard = context.getSystemService(ClipboardManager::class.java)
                                 clipboard.setPrimaryClip(ClipData.newPlainText("repo", repoUrl))
-                                Toast.makeText(context, "已复制项目地址", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.about_copy_toast), Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("复制")
+                            Text(stringResource(R.string.about_copy))
                         }
                         Button(
                             onClick = {
@@ -121,7 +123,7 @@ import com.openclaw.android.BuildConfig
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("打开 GitHub")
+                            Text(stringResource(R.string.about_open_github))
                         }
                     }
                 }

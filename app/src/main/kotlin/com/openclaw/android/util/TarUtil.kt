@@ -70,9 +70,10 @@ object TarUtil {
         destination: File,
     ) {
         val pendingLinks = mutableListOf<PendingLink>()
+        // canonical 解析可能触发 IO，提到循环外只算一次
+        val root = destination.canonicalFile
         while (true) {
             val entry: TarArchiveEntry = tar.nextEntry ?: break
-            val root = destination.canonicalFile
             var relativeName = entry.name.replace('\\', '/').trimStart('/')
             while (relativeName.startsWith("./")) {
                 relativeName = relativeName.substring(2)

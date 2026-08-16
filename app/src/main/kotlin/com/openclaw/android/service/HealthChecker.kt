@@ -2,6 +2,7 @@ package com.openclaw.android.service
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import javax.inject.Inject
@@ -20,11 +21,18 @@ class HealthChecker @Inject constructor(
             .url("http://$host:$port$path")
             .get()
             .build()
-        runCatching {
-            client.newCall(request).execute().use { response ->
-                response.isSuccessful
-            }
-        }.getOrDefault(false)
+        // 给单次健康检查加超时，避免网关 accept 后不响应时拖住整个 5s 健康循环
+        withTimeoutOrNull(HEALTH_TIMEOUT_MS) {
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    response.isSuccessful
+                }
+            }.getOrDefault(false)
+        } ?: false
+    }
+
+    private companion object {
+        const val HEALTH_TIMEOUT_MS = 3_000L
     }
 }
 

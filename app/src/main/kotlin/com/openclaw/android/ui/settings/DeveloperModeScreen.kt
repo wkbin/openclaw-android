@@ -29,7 +29,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.openclaw.android.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,10 +56,10 @@ import kotlinx.coroutines.launch
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("开发者模式") },
+                title = { Text(stringResource(R.string.settings_developer)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -71,7 +73,7 @@ import kotlinx.coroutines.launch
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = "openclaw.json",
+                text = stringResource(R.string.dev_json_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             OutlinedTextField(
@@ -83,12 +85,12 @@ import kotlinx.coroutines.launch
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                label = { Text("JSON 配置") },
+                label = { Text(stringResource(R.string.dev_json_label)) },
                 enabled = loaded,
             )
             if (saved) {
                 Text(
-                    text = "已保存",
+                    text = stringResource(R.string.dev_saved),
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -100,14 +102,18 @@ import kotlinx.coroutines.launch
                         saved = ok
                         Toast.makeText(
                             context,
-                            if (ok) "配置已保存" else "保存失败",
+                            if (ok) {
+                                context.getString(R.string.dev_save_toast_success)
+                            } else {
+                                context.getString(R.string.dev_save_toast_fail)
+                            },
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("保存")
+                Text(stringResource(R.string.common_save))
             }
         }
     }

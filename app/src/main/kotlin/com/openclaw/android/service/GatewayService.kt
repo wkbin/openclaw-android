@@ -61,13 +61,23 @@ class GatewayService : Service() {
     @Inject
     lateinit var healthChecker: HealthChecker
 
+    @Inject
+    lateinit var linuxGatewayInstaller: LinuxGatewayInstaller
+
+    @Inject
+    lateinit var linuxGatewayProcessManager: LinuxGatewayProcessManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var healthJob: Job? = null
     private var memoryJob: Job? = null
+    // 崩溃/健康判定相关状态全部只在 Main（serviceScope）线程读写，避免与 ProcessManager 的
+    // IO 子协程（onExit 回调）并发产生可见性竞态。
     private var crashRestartCount = 0
     private var pendingUpdateVersion: String? = null
     private var pendingUpdateHealthStart: Long? = null
     private var pendingUpdateRollback = false
+    // 单飞：同一时刻只允许一个 startGateway 生效，防止 ACTION_START / 崩溃重启 / applyUpdate 并发互杀
+    private var startJob: Job? = null
     // 最近一次已告警的崩溃/错误生命周期，用于"仅提醒一次"
     private var lastAlertLifecycle: GatewayLifecycle? = null
 
@@ -104,15 +114,19 @@ class GatewayService : Service() {
     override fun onDestroy() {
         healthJob?.cancel()
         memoryJob?.cancel()
-        serviceScope.launch {
+        // processManager 持有自有的 processScope（SupervisorJob + IO），不随 serviceScope 消亡，
+        // 无需在此 self-cancel 自己的作用域。直接后台停止子进程即可（Linux 模式进程一并停）。
+        CoroutineScope(Dispatchers.IO).launch {
             runCatching { processManager.stop() }
-            serviceScope.cancel()
+            runCatching { linuxGatewayProcessManager.stop() }
         }
         super.onDestroy()
     }
 
     private fun startGatewayAsync() {
-        serviceScope.launch {
+        // 单飞：上一次 start 仍在进行时忽略再次请求，避免并发互杀/重复拉进程
+        if (startJob?.isActive == true) return
+        startJob = serviceScope.launch {
             runCatching { startGateway() }
                 .onFailure { error ->
                     logRepository.append(LogLevel.Error, "service", error.message ?: "启动失败")
@@ -128,13 +142,20 @@ class GatewayService : Service() {
         gatewayRepository.starting(config.port, config.lastVersion)
         logRepository.append(LogLevel.Info, "service", "准备运行时目录")
 
+        if (config.linuxMode) {
+            startGatewayInLinux(config)
+            return
+        }
+
         val paths = assetExtractor.prepareRuntime()
         writeOpenClawConfig(paths, config)
         crashRestartCount = 0
         logRepository.append(LogLevel.Info, "service", "启动 Node 进程")
 
         processManager.start(paths, config) { exitCode ->
-            handleCrash(config.port, exitCode)
+            // onExit 运行在 ProcessManager 的 IO 子协程，这里先切回 Main 再统一走崩溃处理，
+            // 确保 crashRestartCount/pendingUpdateVersion 只在 Main 线程读写。
+            serviceScope.launch { handleCrash(config.port, exitCode) }
         }
 
         healthJob?.cancel()
@@ -147,11 +168,110 @@ class GatewayService : Service() {
         }
     }
 
+    /**
+     * Linux（proot）模式启动：rootfs 内安装 node + openclaw,再以 linuxGatewayProcessManager 运行。
+     */
+    private suspend fun startGatewayInLinux(config: GatewayConfig) {
+        logRepository.append(LogLevel.Info, "service", "初始化 Linux 环境")
+        val installed = linuxGatewayInstaller.ensureInstalled { line ->
+            serviceScope.launch {
+                logRepository.append(LogLevel.Info, "gateway-linux", line.trimEnd())
+            }
+        }
+        if (!installed) {
+            val message = "Linux 网关安装失败，请检查 Linux 环境与网络"
+            logRepository.append(LogLevel.Error, "service", message)
+            gatewayRepository.error(message)
+            return
+        }
+
+        // 网关配置写到 rootfs 的 /root/.openclaw/openclaw.json（宿主路径 = rootfsDir/root/.openclaw/）
+        writeOpenClawConfigLinux(config)
+        crashRestartCount = 0
+        logRepository.append(LogLevel.Info, "service", "在 Linux 中启动 OpenClaw 网关")
+
+        linuxGatewayProcessManager.start(
+            installDir = linuxGatewayInstaller.guestInstallDir,
+            config = config,
+        ) { exitCode ->
+            serviceScope.launch { handleCrash(config.port, exitCode) }
+        }
+
+        healthJob?.cancel()
+        healthJob = serviceScope.launch {
+            monitorHealth(config.host, config.port)
+        }
+        memoryJob?.cancel()
+        memoryJob = serviceScope.launch {
+            monitorMemory()
+        }
+    }
+
+    /** Linux 模式的 openclaw.json 写入：以 rootfs 真实路径为目标,proot -R 后即为 /root/.openclaw/。 */
+    private suspend fun writeOpenClawConfigLinux(config: GatewayConfig) {
+        withContext(Dispatchers.IO) {
+            val rootHome = File(linuxGatewayProcessManager.homeDir(), ".openclaw").apply { mkdirs() }
+            val configFile = File(rootHome, "openclaw.json")
+            val root = runCatching {
+                if (configFile.exists()) JSONObject(configFile.readText()) else JSONObject()
+            }.getOrDefault(JSONObject())
+            val env = root.optJSONObject("env") ?: JSONObject()
+            ModelCatalog.providers.forEach { provider ->
+                val key = config.apiKeys.apiKeyFor(provider.id)
+                if (key.isNotBlank()) env.put(envVarFor(provider.id), key)
+            }
+            root.put("env", env)
+
+            val mergedModels = root.optJSONObject("models") ?: JSONObject()
+            val providers = mergedModels.optJSONObject("providers") ?: JSONObject()
+            ModelCatalog.providers.forEach { provider ->
+                if (config.apiKeys.apiKeyFor(provider.id).isNotBlank()) {
+                    val models = JSONArray()
+                    provider.models.forEach { model ->
+                        models.put(JSONObject().put("id", model.id).put("name", model.name))
+                    }
+                    providers.put(
+                        provider.id,
+                        JSONObject()
+                            .put("baseUrl", provider.baseUrl)
+                            .put("apiKey", "\${${envVarFor(provider.id)}}")
+                            .put("api", provider.api)
+                            .put("timeoutSeconds", 600)
+                            .put("models", models),
+                    )
+                }
+            }
+            mergedModels.put("providers", providers)
+            root.put("models", mergedModels)
+
+            // 与旧路径一致：外部 provider 插件全部 deny（完整 Linux 下同样避免自动 npm 安装插件）
+            val plugins = root.optJSONObject("plugins") ?: JSONObject()
+            val deny = plugins.optJSONArray("deny") ?: JSONArray()
+            val existing = buildSet {
+                for (i in 0 until deny.length()) add(deny.optString(i))
+            }
+            EXTERNAL_PROVIDER_PLUGIN_ID.values.filterNot { it in existing }.forEach { deny.put(it) }
+            plugins.put("deny", deny)
+            root.put("plugins", plugins)
+
+            val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
+            mergedAgents.remove("list")
+            val defaults = JSONObject().put("timeoutSeconds", 600)
+            if (config.defaultModel.isNotBlank()) {
+                defaults.put("model", JSONObject().put("primary", config.defaultModel))
+            }
+            mergedAgents.put("defaults", defaults)
+            root.put("agents", mergedAgents)
+            FileUtil.atomicWriteText(configFile, root.toString(2))
+        }
+    }
+
     private suspend fun stopGateway() {
         gatewayRepository.stopping()
         healthJob?.cancel()
         memoryJob?.cancel()
         processManager.stop()
+        linuxGatewayProcessManager.stop()
         gatewayRepository.idle()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -186,7 +306,7 @@ class GatewayService : Service() {
         pendingUpdateVersion = restarting.version
         pendingUpdateRollback = false
         pendingUpdateHealthStart = System.currentTimeMillis()
-        startGateway()
+        startGatewayAsync()
     }
 
     private suspend fun monitorHealth(host: String, port: Int) {
@@ -225,7 +345,7 @@ class GatewayService : Service() {
         pendingUpdateVersion = restarting.version
         pendingUpdateRollback = true
         pendingUpdateHealthStart = System.currentTimeMillis()
-        startGateway()
+        startGatewayAsync()
     }
 
     private suspend fun writeOpenClawConfig(
@@ -267,6 +387,25 @@ class GatewayService : Service() {
         mergedModels.put("providers", providers)
         root.put("models", mergedModels)
 
+        // 离线运行时未捆绑 @openclaw/*-provider 这类按 npm 安装的外部供应商插件。openclaw.json
+        // 无论是否配置了对应 API Key，都可能引用这些厂商：agents.defaults.model.primary 恒写入
+        // 默认模型（未配置时默认 deepseek/deepseek-v4-flash），OpenClaw 启动迁移会把被引用的厂商
+        // 当 "missing configured plugin" 去 npm 安装；本应用是离线包（npm 被 spawn-guard 以 127
+        // stub 掉），一旦触发安装迁移即失败、网关拒绝启动（表现为 "选模型但没配 key 也起不来"）。
+        // 解决办法是走 OpenClaw 的 plugins.deny 机制：把映射到外部插件的供应商无条件列入 deny
+        // （不依赖是否配置了 Key），令其排除出 "需安装的缺失插件" 集合，仅用 models.providers.*
+        // 的内联 openai 兼容配置。
+        // 注意：deny 只影响 npm 插件安装，不影响内联 provider 的 baseUrl/api/apiKey 使用——
+        // 配置了 Key 的厂商仍以内联 provider 正常运行。
+        val plugins = root.optJSONObject("plugins") ?: JSONObject()
+        val deny = plugins.optJSONArray("deny") ?: JSONArray()
+        val existing = buildSet {
+            for (i in 0 until deny.length()) add(deny.optString(i))
+        }
+        EXTERNAL_PROVIDER_PLUGIN_ID.values.filterNot { it in existing }.forEach { deny.put(it) }
+        plugins.put("deny", deny)
+        root.put("plugins", plugins)
+
         // 默认模型独立于供应商 Key，必须始终写入，否则网关回退到内置默认模型
         val mergedAgents = root.optJSONObject("agents") ?: JSONObject()
         mergedAgents.remove("list")
@@ -279,11 +418,30 @@ class GatewayService : Service() {
         FileUtil.atomicWriteText(configFile, root.toString(2))
     }
 
+    // 供应商 id -> OpenClaw 官方外部插件名（missing-configured-plugin 会用 npmSpec 安装这些插件）。
+    // 仅列出官方 catalog 中有 npm 安装项、且未随离线包捆绑的供应商；openai/anthropic 为核心内置、
+    // mimo 为纯自定义，均不在此表。
+    private val EXTERNAL_PROVIDER_PLUGIN_ID = mapOf(
+        "deepseek" to "deepseek",
+        "qwen" to "qwen",
+        "kimi" to "moonshot",
+        "stepfun" to "stepfun",
+    )
+
     private suspend fun monitorMemory() {
         delay(30_000L)
         while (coroutineContext.isActive) {
-            val pid = processManager.currentPid()
-            val memoryKb = pid?.let { readMemoryKb(it) }
+            val pid = when {
+                linuxGatewayProcessManager.isRunning() ->
+                    linuxGatewayProcessManager.currentPid()
+                else -> processManager.currentPid()
+            }
+            // 主线程不阻塞做文件 IO；pid 无效（0/负）时跳过，避免白读 /proc/0/status
+            val memoryKb = if (pid != null && pid > 0) {
+                withContext(Dispatchers.IO) { readMemoryKb(pid) }
+            } else {
+                null
+            }
             gatewayRepository.updateMemory(memoryKb)
             delay(30_000L)
         }
@@ -311,13 +469,7 @@ class GatewayService : Service() {
         }
         crashRestartCount += 1
         delay(3_000L)
-        serviceScope.launch {
-            runCatching { startGateway() }
-                .onFailure { error ->
-                    logRepository.append(LogLevel.Error, "service", error.message ?: "自动重启失败")
-                    gatewayRepository.error(error.message ?: "自动重启失败")
-                }
-        }
+        startGatewayAsync()
     }
 
     private fun readMemoryKb(pid: Int): Long? {

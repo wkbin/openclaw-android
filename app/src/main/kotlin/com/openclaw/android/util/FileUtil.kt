@@ -14,7 +14,13 @@ object FileUtil {
         targetFile: File,
     ) {
         targetFile.parentFile?.mkdirs()
-        context.assets.open(assetPath).use { input ->
+        // 解压前预检目标盘可用空间，避免磁盘满时读到一半抛裸 IOException
+        val open = context.assets.open(assetPath)
+        open.use { input ->
+            val needed = input.available().toLong().coerceAtLeast(0L)
+            if (availableBytes(targetFile.parentFile!!) < needed) {
+                throw java.io.IOException("存储空间不足，无法解压 $assetPath")
+            }
             FileOutputStream(targetFile).use { output ->
                 input.copyTo(output)
             }

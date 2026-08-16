@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.ChatMessage
 import com.openclaw.android.model.ChatAttachment
 import com.openclaw.android.model.ChatContentPart
@@ -89,6 +90,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -130,7 +132,10 @@ fun ChatScreen(
                     } else {
                         Toast.makeText(
                             context,
-                            "图片过大或读取失败（限制 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）",
+                            context.getString(
+                                R.string.chat_image_too_large,
+                                MAX_ATTACHMENT_BYTES / 1024 / 1024,
+                            ),
                             Toast.LENGTH_LONG,
                         ).show()
                     }
@@ -151,7 +156,10 @@ fun ChatScreen(
                     } else {
                         Toast.makeText(
                             context,
-                            "文件过大或读取失败（限制 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）",
+                            context.getString(
+                                R.string.chat_file_too_large,
+                                MAX_ATTACHMENT_BYTES / 1024 / 1024,
+                            ),
                             Toast.LENGTH_LONG,
                         ).show()
                     }
@@ -187,7 +195,7 @@ fun ChatScreen(
         drawerContent = {
             ModalDrawerSheet {
                 Text(
-                    text = "会话",
+                    text = stringResource(R.string.chat_sessions),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -201,7 +209,7 @@ fun ChatScreen(
                         .padding(horizontal = 16.dp),
                 ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
-                    Text("新建会话")
+                    Text(stringResource(R.string.chat_new_session))
                 }
                 OutlinedButton(
                     onClick = {
@@ -212,7 +220,7 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                 ) {
-                    Text("清空当前会话")
+                    Text(stringResource(R.string.chat_clear_session))
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -236,15 +244,15 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("聊天") },
+                    title = { Text(stringResource(R.string.chat_title)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                         }
                     },
                     actions = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Outlined.Menu, contentDescription = "会话列表")
+                            Icon(Icons.Outlined.Menu, contentDescription = stringResource(R.string.chat_sessions_cd))
                         }
                     },
                 )
@@ -270,7 +278,7 @@ fun ChatScreen(
                             value = input,
                             onValueChange = { input = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("输入消息…") },
+                            placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
                             enabled = connected,
                         )
                         if (isStreaming) {
@@ -278,7 +286,7 @@ fun ChatScreen(
                                 onClick = viewModel::stopGeneration,
                                 enabled = connected,
                             ) {
-                                Icon(Icons.Outlined.Stop, contentDescription = "停止生成")
+                                Icon(Icons.Outlined.Stop, contentDescription = stringResource(R.string.chat_stop_generating))
                             }
                         } else {
                             IconButton(
@@ -293,7 +301,7 @@ fun ChatScreen(
                                 },
                                 enabled = connected,
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
                             }
                         }
                         IconButton(
@@ -306,7 +314,7 @@ fun ChatScreen(
                             },
                             enabled = connected,
                         ) {
-                            Icon(Icons.Outlined.Image, contentDescription = "发送图片")
+                            Icon(Icons.Outlined.Image, contentDescription = stringResource(R.string.chat_send_image))
                         }
                         IconButton(
                             onClick = {
@@ -314,7 +322,7 @@ fun ChatScreen(
                             },
                             enabled = connected,
                         ) {
-                            Icon(Icons.Outlined.AttachFile, contentDescription = "发送文件")
+                            Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.chat_send_file))
                         }
                     }
                 }
@@ -362,11 +370,11 @@ fun ChatScreen(
                                         strokeWidth = 2.dp,
                                     )
                                     Text(
-                                        text = "加载中…",
+                                        text = stringResource(R.string.common_loading),
                                         modifier = Modifier.padding(start = 6.dp),
                                     )
                                 } else {
-                                    Text("加载更早消息")
+                                    Text(stringResource(R.string.chat_load_older))
                                 }
                             }
                         }
@@ -544,13 +552,17 @@ private fun AttachmentPreviewBar(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (attachment.type == "image") "图片已就绪，点击发送即可发送" else "文件已就绪，点击发送即可发送",
+                    text = if (attachment.type == "image") {
+                        stringResource(R.string.chat_image_ready)
+                    } else {
+                        stringResource(R.string.chat_file_ready)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(onClick = onRemove) {
-                Icon(Icons.Filled.Close, contentDescription = "移除附件")
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_remove_attachment))
             }
         }
     }
@@ -646,14 +658,15 @@ private fun SessionRow(
     }
 }
 
+@Composable
 private fun formatRelativeTime(epochMillis: Long?): String {
     if (epochMillis == null || epochMillis <= 0L) return ""
     val diffMin = (System.currentTimeMillis() - epochMillis) / 60_000L
     return when {
-        diffMin < 1 -> "刚刚"
-        diffMin < 60 -> "${diffMin}分钟前"
-        diffMin < 24 * 60 -> "${diffMin / 60}小时前"
-        diffMin < 48 * 60 -> "昨天"
+        diffMin < 1 -> stringResource(R.string.time_just_now)
+        diffMin < 60 -> stringResource(R.string.time_minutes_ago, diffMin)
+        diffMin < 24 * 60 -> stringResource(R.string.time_hours_ago, diffMin / 60)
+        diffMin < 48 * 60 -> stringResource(R.string.time_yesterday)
         else -> SimpleDateFormat("M月d日", Locale.getDefault()).format(Date(epochMillis))
     }
 }
@@ -730,7 +743,9 @@ private fun MessageBubble(
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            text = message.sendError?.let { "发送失败：$it" } ?: "发送失败",
+                            text = message.sendError?.let {
+                                stringResource(R.string.chat_send_failed_with_error, it)
+                            } ?: stringResource(R.string.chat_send_failed),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.weight(1f),
@@ -743,7 +758,7 @@ private fun MessageBubble(
                                 vertical = 0.dp,
                             ),
                         ) {
-                            Text("重试", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.common_retry), style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -819,7 +834,7 @@ private fun ToolCallCard(
                             strokeWidth = 2.dp,
                         )
                         Text(
-                            text = "调用中",
+                            text = stringResource(R.string.tool_call_running),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -832,7 +847,7 @@ private fun ToolCallCard(
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            text = "完成",
+                            text = stringResource(R.string.tool_call_done),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -845,7 +860,7 @@ private fun ToolCallCard(
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            text = "失败",
+                            text = stringResource(R.string.tool_call_failed),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                         )

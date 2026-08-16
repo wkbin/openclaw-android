@@ -43,11 +43,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.CronJob
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,18 +78,18 @@ internal fun CronScreen(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("Cron 调度") },
+                title = { Text(stringResource(R.string.cron_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.common_refresh))
                     }
                     IconButton(onClick = { showAdd = !showAdd }) {
-                        Icon(Icons.Outlined.Add, contentDescription = "新建调度")
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.cron_add_cd))
                     }
                 },
             )
@@ -153,7 +155,7 @@ internal fun CronScreen(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "暂无调度任务\n点击右上角 + 新建一个定时任务",
+                            text = stringResource(R.string.cron_empty),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -196,22 +198,22 @@ private fun AddCronCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "新建调度任务",
+                text = stringResource(R.string.cron_add_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("任务名称") },
+                label = { Text(stringResource(R.string.cron_name_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = expr,
                 onValueChange = { expr = it },
-                label = { Text("Cron 表达式") },
+                label = { Text(stringResource(R.string.cron_expr_label)) },
                 supportingText = {
-                    Text("例：0 9 * * * 每天 9 点；*/10 * * * * 每 10 分钟")
+                    Text(stringResource(R.string.cron_expr_hint))
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -219,7 +221,7 @@ private fun AddCronCard(
             OutlinedTextField(
                 value = prompt,
                 onValueChange = { prompt = it },
-                label = { Text("任务内容（发给 Agent 的提示词）") },
+                label = { Text(stringResource(R.string.cron_prompt_label)) },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -228,7 +230,7 @@ private fun AddCronCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "启用",
+                    text = stringResource(R.string.cron_enabled),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
@@ -245,7 +247,7 @@ private fun AddCronCard(
                     onClick = onCancel,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("取消")
+                    Text(stringResource(R.string.common_cancel))
                 }
                 Button(
                     onClick = {
@@ -259,7 +261,7 @@ private fun AddCronCard(
                     enabled = name.isNotBlank() && expr.isNotBlank() && prompt.isNotBlank(),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("创建")
+                    Text(stringResource(R.string.cron_create))
                 }
             }
         }
@@ -326,7 +328,11 @@ private fun CronJobCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "下次 ${formatCronTime(job.nextRunAtMs)} · 上次 ${formatCronTime(job.lastRunAtMs)}",
+                    text = stringResource(
+                        R.string.cron_next_last,
+                        formatCronTime(job.nextRunAtMs),
+                        formatCronTime(job.lastRunAtMs),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -345,14 +351,14 @@ private fun CronJobCard(
                 IconButton(onClick = onRunNow) {
                     Icon(
                         Icons.Outlined.PlayArrow,
-                        contentDescription = "立即执行",
+                        contentDescription = stringResource(R.string.cron_run_now_cd),
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Outlined.Delete,
-                        contentDescription = "删除",
+                        contentDescription = stringResource(R.string.cron_delete_cd),
                         tint = MaterialTheme.colorScheme.error,
                     )
                 }

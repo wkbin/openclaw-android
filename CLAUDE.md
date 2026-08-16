@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An Android app that bundles the full OpenClaw personal AI gateway (Termux Bionic Node 24 + OpenClaw 2026.7.1-2) as offline assets, runs it as a local process, and exposes it through a native Compose UI. No root required; only the `arm64-v8a` ABI is packaged. Most code comments and UI strings are in Chinese — keep new copy consistent with that.
 
+The app supports **two runtime modes**:
+- **Static mode (default)**: bundled libnode.so + OpenClaw static package (no network needed after install).
+- **Linux mode**: proot runs a full Debian/Ubuntu rootfs; OpenClaw and any tool install/run the official Linux way (`apt`/`npm`/`pip`). Auto-selected via `GatewayConfig.linuxMode`.
+
 ## Build & test
 
 ```bash
@@ -55,6 +59,19 @@ Single-module app: `app/src/main/kotlin/com/openclaw/android`. Layered as `util 
 ### Update flow
 
 `UpdateRepository` is a state machine (`UpdateState`): `Checking → Available → Downloading → Verifying → ReadyToInstall → Installing → RestartingGateway → Completed | Failed`. Download is resumable (`Range`), then SHA256-verified, installed into a new `versions/<v>` dir with a backup of the previous version, then `GatewayService.applyUpdate()` restarts the gateway and the health-check loop either confirms (`Completed`) or triggers `rollbackToPrevious()`. The GitHub owner/repo is configurable, defaulting to `openclaw/openclaw` — update assets are named `openclaw-v*-android-arm64.tar.gz`.
+
+### Linux proot mode (complete Linux runtime)
+
+To avoid the offline static-package limitation (missing npm → "Cannot find module" on configured plugins like deepseek), the app can run the gateway inside a **proot** full Linux.
+
+- `LinuxRuntimeManager` (repository) prepares the runtime into `filesDir/linux`: `bin/proot`, optional `lib/libtalloc.so.2`, and `rootfs/`. Sources, in priority order: `assets/linux/proot` (ELF), `assets/linux/rootfs.tar.gz` (offline rootfs), else download `rootfsUrl` (default official Ubuntu base arm64 archives). Its `StateFlow<LinuxRuntimeState>` drives the「Linux 环境」settings page.
+- `ProotExecutor` runs one-shot commands inside the rootfs:
+  `proot -R <rootfs> -0 -b /proc -b /sys -b /dev /bin/bash -lc '<cmd>'` (Mutex-serialized). `extraBinds` maps a host path into the guest (e.g. `/host-openclaw`).
+- `LinuxTerminalSession` keeps one persistent `proot bash`; its `SharedFlow<String> output`, `send(line)` power the interactive terminal.
+- `LinuxGatewayInstaller` ensures the guest has node (`apt-get install nodejs npm`) and installs OpenClaw code into guest `/opt/openclaw/openclaw.mjs` — from `assets/linux/openclaw/` (stage-copied to cache) if present, else `npm install -g openclaw`.
+- `LinuxGatewayProcessManager` is the Linux-mode equivalent of `ProcessManager`: spawns `proot ... /usr/bin/node /opt/openclaw/openclaw.mjs gateway run ...`. proot shares the host network stack, so `127.0.0.1:<port>` is reachable with **zero** changes to the chat protocol / health check.
+- `GatewayService.startGateway()` branches on `GatewayConfig.linuxMode`: Linux path calls `linuxGatewayInstaller.ensureInstalled()` → writes `openclaw.json` to `filesDir/linux/rootfs/root/.openclaw/` → `linuxGatewayProcessManager.start()`. The memory sampler falls back to the Linux process manager's pid. `stop()`/`onDestroy()` stop both managers.
+- `assets/linux/` ships optional offline artifacts; see the in-tree `assets/linux/README.md`. Linux mode requires network for first-time rootfs/npm unless everything is pre-bundled.
 
 ### UI
 

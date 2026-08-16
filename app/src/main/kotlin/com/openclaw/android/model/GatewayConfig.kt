@@ -18,6 +18,8 @@ data class GatewayConfig(
     val defaultModel: String = "deepseek/deepseek-v4-flash",
     val githubOwner: String = "openclaw",
     val githubRepo: String = "openclaw",
+    /** true = 网关在 proot 完整 Linux 内运行（rootfs 内 node + openclaw），false = 旧 libnode.so 静态包路径。 */
+    val linuxMode: Boolean = false,
 )
 
 @Serializable

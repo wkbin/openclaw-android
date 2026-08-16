@@ -224,6 +224,52 @@ object NotificationUtil {
             .notify(ALERT_NOTIFICATION_ID, buildAlertNotification(context, title, message))
     }
 
+    // 聊天/agent 新消息推送：独立渠道与 id，点开直达聊天页
+    private const val CHAT_CHANNEL_ID = "gateway_chat"
+    private const val CHAT_NOTIFICATION_ID_BASE = 1100
+
+    /** 生成一条聊天新消息通知（低重要性、可堆叠）。sessionKey 用于后续直达特定会话（预留）。 */
+    fun notifyChatPush(
+        context: Context,
+        sessionKey: String,
+        title: String,
+        message: String,
+    ) {
+        ensureChatChannel(context)
+        val openIntent = PendingIntent.getActivity(
+            context,
+            sessionKey.hashCode(),
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_CHAT, true),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = Notification.Builder(context, CHAT_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setContentIntent(openIntent)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(CHAT_NOTIFICATION_ID_BASE + (sessionKey.hashCode() % 100), notification)
+    }
+
+    private fun ensureChatChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHAT_CHANNEL_ID,
+                    "聊天消息",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "网关主动发送的消息与新会话回复"
+                },
+            )
+        }
+    }
+
     private fun formatBytes(bytes: Long): String {
         if (bytes <= 0L) return "0 B"
         val units = arrayOf("B", "KB", "MB", "GB")

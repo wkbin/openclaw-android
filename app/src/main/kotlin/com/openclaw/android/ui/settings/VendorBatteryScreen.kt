@@ -23,28 +23,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.openclaw.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
  internal fun VendorBatteryScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val vendors = listOf(
-        "小米 / MIUI" to "设置 → 应用设置 → 应用管理 → OpenClaw → 省电策略 → 无限制；后台弹出界面/自启动 全部允许。",
-        "华为 / HarmonyOS" to "设置 → 应用 → 应用启动管理 → OpenClaw → 手动管理，打开自启动、关联启动、后台活动。",
-        "OPPO / ColorOS" to "设置 → 电池 → 更多设置 → 耗电保护 → OpenClaw → 允许后台运行。",
-        "vivo / OriginOS" to "设置 → 电池 → 后台耗电管理 → OpenClaw → 允许后台高耗电；并允许自启动。",
-        "三星 / One UI" to "设置 → 电池 → 后台使用限制 → OpenClaw → 设为“不受限制”。",
+        stringResource(R.string.vendor_xiaomi_name) to stringResource(R.string.vendor_xiaomi_desc),
+        stringResource(R.string.vendor_huawei_name) to stringResource(R.string.vendor_huawei_desc),
+        stringResource(R.string.vendor_oppo_name) to stringResource(R.string.vendor_oppo_desc),
+        stringResource(R.string.vendor_vivo_name) to stringResource(R.string.vendor_vivo_desc),
+        stringResource(R.string.vendor_samsung_name) to stringResource(R.string.vendor_samsung_desc),
     )
 
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("厂商保活") },
+                title = { Text(stringResource(R.string.vendor_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )

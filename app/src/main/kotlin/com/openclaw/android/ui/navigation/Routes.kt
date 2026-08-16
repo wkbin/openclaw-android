@@ -58,3 +58,11 @@ data object CronRoute
 
 @Serializable
 data object SkillsRoute
+
+// Linux 完整环境（proot）：主界面底部导航 tab（终端）
+@Serializable
+data object LinuxRoute
+
+// 设置页内 Linux 环境管理入口
+@Serializable
+data object LinuxEnvRoute

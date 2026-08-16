@@ -3,6 +3,7 @@ package com.openclaw.android.di
 import android.content.Context
 import androidx.room.Room
 import com.openclaw.android.data.db.AppDatabase
+import com.openclaw.android.data.db.ChatDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,5 +23,9 @@ object RoomModule {
         context,
         AppDatabase::class.java,
         "openclaw.db",
-    ).build()
+    ).fallbackToDestructiveMigration().build()
+
+    @Provides
+    @Singleton
+    fun provideChatDao(db: AppDatabase): ChatDao = db.chatDao()
 }

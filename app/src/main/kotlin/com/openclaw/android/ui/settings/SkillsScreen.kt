@@ -39,10 +39,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.SkillInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,15 +69,15 @@ internal fun SkillsScreen(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("技能管理") },
+                title = { Text(stringResource(R.string.skills_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.common_refresh))
                     }
                 },
             )
@@ -130,7 +132,7 @@ internal fun SkillsScreen(
                             modifier = Modifier.size(40.dp),
                         )
                         Text(
-                            text = "暂无技能\n需要网关已连接才能扫描技能目录",
+                            text = stringResource(R.string.skills_empty),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -204,14 +206,14 @@ private fun SkillCard(
                 )
                 if (skill.bundled) {
                     SkillBadge(
-                        text = "内置",
+                        text = stringResource(R.string.skills_bundled_badge),
                         color = MaterialTheme.colorScheme.primary,
                         background = MaterialTheme.colorScheme.primaryContainer,
                     )
                 }
                 if (skill.disabled) {
                     SkillBadge(
-                        text = "已停用",
+                        text = stringResource(R.string.skills_disabled_badge),
                         color = MaterialTheme.colorScheme.error,
                         background = MaterialTheme.colorScheme.errorContainer,
                     )

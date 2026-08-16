@@ -54,10 +54,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 import com.openclaw.android.model.GatewayLifecycle
 import com.openclaw.android.model.GatewayStatus
 
@@ -77,7 +79,7 @@ fun DashboardScreen(
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
-            TopAppBar(title = { Text("仪表盘") })
+            TopAppBar(title = { Text(stringResource(R.string.dashboard_title)) })
         },
     ) { innerPadding ->
         LazyColumn(
@@ -100,7 +102,7 @@ fun DashboardScreen(
                             clipboard.setPrimaryClip(
                                 ClipData.newPlainText("OpenClaw crash log", crashLog),
                             )
-                            Toast.makeText(context, "已复制崩溃日志", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.dashboard_copy_crash_toast), Toast.LENGTH_SHORT).show()
                         },
                         onDismiss = viewModel::dismissCrashLog,
                     )
@@ -120,7 +122,7 @@ fun DashboardScreen(
                             clipboard.setPrimaryClip(
                                 ClipData.newPlainText("OpenClaw URL", url),
                             )
-                            Toast.makeText(context, "链接已复制", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.dashboard_copy_link_toast), Toast.LENGTH_SHORT).show()
                         },
                         onOpen = viewModel::openInBrowser,
                     )
@@ -145,7 +147,7 @@ fun DashboardScreen(
                     ) {
                         Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("进入聊天")
+                        Text(stringResource(R.string.dashboard_open_chat))
                     }
                 }
             }
@@ -170,7 +172,7 @@ fun DashboardScreen(
                                 strokeWidth = 2.dp,
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text("启动中")
+                            Text(stringResource(R.string.dashboard_starting))
                         }
                         status.lifecycle == GatewayLifecycle.Stopping -> {
                             CircularProgressIndicator(
@@ -178,17 +180,17 @@ fun DashboardScreen(
                                 strokeWidth = 2.dp,
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text("停止中")
+                            Text(stringResource(R.string.dashboard_stopping))
                         }
                         running -> {
                             Icon(Icons.Outlined.Stop, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("停止")
+                            Text(stringResource(R.string.dashboard_stop))
                         }
                         else -> {
                             Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("启动")
+                            Text(stringResource(R.string.dashboard_start))
                         }
                     }
                 }
@@ -219,11 +221,11 @@ private fun StatusHeroCard(status: GatewayStatus) {
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(
-                        text = "OpenClaw 网关",
+                        text = stringResource(R.string.dashboard_gateway_title),
                         style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
-                        text = "个人 AI 网关 · 本地运行",
+                        text = stringResource(R.string.dashboard_gateway_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -237,7 +239,7 @@ private fun StatusHeroCard(status: GatewayStatus) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "网关版本",
+                    text = stringResource(R.string.dashboard_gateway_version),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -272,7 +274,7 @@ private fun MetricsCard(status: GatewayStatus) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "运行状态",
+                text = stringResource(R.string.dashboard_runtime),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -281,12 +283,12 @@ private fun MetricsCard(status: GatewayStatus) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MetricTile(
-                    label = "端口",
+                    label = stringResource(R.string.dashboard_port),
                     value = status.port.toString(),
                     modifier = Modifier.weight(1f),
                 )
                 MetricTile(
-                    label = "健康",
+                    label = stringResource(R.string.dashboard_health),
                     value = healthText(status),
                     modifier = Modifier.weight(1f),
                     valueColor = healthColor(status),
@@ -297,7 +299,7 @@ private fun MetricsCard(status: GatewayStatus) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MetricTile(
-                    label = "内存",
+                    label = stringResource(R.string.dashboard_memory),
                     value = status.memoryKb?.let { "${it / 1024L} MB" } ?: "—",
                     modifier = Modifier.weight(1f),
                 )
@@ -306,7 +308,7 @@ private fun MetricsCard(status: GatewayStatus) {
                     formatUptime((System.currentTimeMillis() - it) / 1000L)
                 } ?: "—"
                 MetricTile(
-                    label = "运行时长",
+                    label = stringResource(R.string.dashboard_uptime),
                     value = uptime,
                     modifier = Modifier.weight(1f),
                 )
@@ -385,13 +387,13 @@ private fun CrashAlertCard(
                         tint = MaterialTheme.colorScheme.error,
                     )
                     Text(
-                        text = "上次崩溃日志",
+                        text = stringResource(R.string.dashboard_crash_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, contentDescription = "关闭")
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
                 }
             }
             Text(
@@ -404,7 +406,7 @@ private fun CrashAlertCard(
             TextButton(onClick = onCopy) {
                 Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
-                Text("复制日志")
+                Text(stringResource(R.string.common_copy_log))
             }
         }
     }
@@ -437,7 +439,7 @@ private fun AccessCard(
                     tint = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "浏览器访问链接",
+                    text = stringResource(R.string.dashboard_browser_link),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -456,7 +458,7 @@ private fun AccessCard(
                 ) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("复制链接")
+                    Text(stringResource(R.string.dashboard_copy_link))
                 }
                 OutlinedButton(
                     onClick = onOpen,
@@ -464,7 +466,7 @@ private fun AccessCard(
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("打开浏览器")
+                    Text(stringResource(R.string.dashboard_open_browser))
                 }
             }
         }
@@ -491,12 +493,12 @@ private fun WaitingHealthCard() {
                     tint = MaterialTheme.colorScheme.tertiary,
                 )
                 Text(
-                    text = "等待健康检查通过",
+                    text = stringResource(R.string.dashboard_waiting_health_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
             Text(
-                text = "健康检查通过后会自动显示浏览器访问链接。",
+                text = stringResource(R.string.dashboard_waiting_health_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -509,9 +511,11 @@ private fun WaitingHealthCard() {
 private fun EmptyStateCard(lifecycle: GatewayLifecycle) {
     val (title, description) = when (lifecycle) {
         GatewayLifecycle.Error, GatewayLifecycle.Crashed ->
-            "网关运行异常" to "上次运行未能正常启动，请查看上方状态信息后重试。"
+            stringResource(R.string.dashboard_error_title) to
+                stringResource(R.string.dashboard_error_desc)
         else ->
-            "网关尚未启动" to "点击下方「启动」按钮，网关将作为前台服务在后台运行。"
+            stringResource(R.string.dashboard_not_started_title) to
+                stringResource(R.string.dashboard_not_started_desc)
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -586,12 +590,12 @@ private fun statusColor(status: GatewayStatus): Color = when {
 
 @Composable
 private fun statusLabel(status: GatewayStatus): String = when {
-    status.lifecycle == GatewayLifecycle.Running && status.healthy -> "运行中"
+    status.lifecycle == GatewayLifecycle.Running && status.healthy -> stringResource(R.string.status_running)
     status.lifecycle == GatewayLifecycle.Running ||
-        status.lifecycle == GatewayLifecycle.Starting -> "启动中"
+        status.lifecycle == GatewayLifecycle.Starting -> stringResource(R.string.status_starting)
     status.lifecycle == GatewayLifecycle.Error ||
-        status.lifecycle == GatewayLifecycle.Crashed -> "异常"
-    else -> "已停止"
+        status.lifecycle == GatewayLifecycle.Crashed -> stringResource(R.string.status_abnormal)
+    else -> stringResource(R.string.status_stopped)
 }
 
 @Composable
@@ -605,10 +609,11 @@ private fun healthColor(status: GatewayStatus): Color = when {
     else -> MaterialTheme.colorScheme.outline
 }
 
+@Composable
 private fun healthText(status: GatewayStatus): String = when {
     status.lifecycle != GatewayLifecycle.Running -> "—"
-    status.healthy -> "正常"
-    else -> "等待中"
+    status.healthy -> stringResource(R.string.status_healthy)
+    else -> stringResource(R.string.status_waiting)
 }
 
 private fun formatUptime(seconds: Long): String {

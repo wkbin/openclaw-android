@@ -27,8 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openclaw.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,10 +47,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("主题与缩放") },
+                title = { Text(stringResource(R.string.theme_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -62,20 +64,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                SectionTitle("主题模式")
+                SectionTitle(stringResource(R.string.theme_mode_section))
                 SettingsGroup {
-                    ThemeOption("system", "跟随系统", mode) { mode = it }
+                    ThemeOption("system", stringResource(R.string.theme_follow_system), mode) { mode = it }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ThemeOption("light", "浅色模式", mode) { mode = it }
+                    ThemeOption("light", stringResource(R.string.theme_light), mode) { mode = it }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ThemeOption("dark", "深色模式", mode) { mode = it }
+                    ThemeOption("dark", stringResource(R.string.theme_dark), mode) { mode = it }
                 }
             }
             item {
-                SectionTitle("界面缩放")
+                SectionTitle(stringResource(R.string.theme_scale_section))
                 SettingsGroup {
+                    val scalePercentText = "%.0f".format(scale * 100)
                     Text(
-                        text = "缩放 ${"%.0f".format(scale * 100)}%",
+                        text = stringResource(R.string.theme_scale_value, scalePercentText),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Slider(
@@ -93,7 +96,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("保存外观设置")
+                    Text(stringResource(R.string.theme_save))
                 }
             }
         }

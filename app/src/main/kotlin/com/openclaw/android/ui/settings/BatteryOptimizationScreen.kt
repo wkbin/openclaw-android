@@ -28,7 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.openclaw.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +42,10 @@ import androidx.compose.ui.unit.dp
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("电池优化") },
+                title = { Text(stringResource(R.string.battery_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -57,10 +59,10 @@ import androidx.compose.ui.unit.dp
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SectionTitle("为什么要设置")
+                SectionTitle(stringResource(R.string.battery_why_section))
                 SettingsGroup {
                     Text(
-                        text = "Android 为了省电可能会杀掉后台的网关进程。允许忽略电池优化后，OpenClaw 能更稳定地持续运行。",
+                        text = stringResource(R.string.battery_why_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -82,7 +84,7 @@ import androidx.compose.ui.unit.dp
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("去设置忽略电池优化")
+                    Text(stringResource(R.string.battery_grant_button))
                 }
             }
         }

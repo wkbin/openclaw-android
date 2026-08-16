@@ -1,8 +1,10 @@
 .gradle/
+.gradle-home/
 .kotlin/
 .idea/
 build/
 */build/
+.tmp-inspect/
 local.properties
 *.iml
 *.jks

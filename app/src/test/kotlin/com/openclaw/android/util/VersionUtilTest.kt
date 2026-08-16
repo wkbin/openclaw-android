@@ -1,4 +1,4 @@
-﻿package com.openclaw.android.util
+package com.openclaw.android.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -63,6 +63,14 @@ class VersionUtilTest {
     fun `non-numeric prerelease marker never crashes and sorts below numeric suffix`() {
         assertLess("1.0.0-beta", "1.0.0-1")
         assertEqual("1.0.0-beta", "1.0.0")
+    }
+
+    @Test
+    fun `prerelease name with trailing digit follows trailing-digit precedence`() {
+        // rc1 -> 1，与 "+buildN"/"纯数字" 共用同一尾随数字优先级
+        assertGreater("1.0.0-rc2", "1.0.0-rc1")
+        assertLess("1.0.0-beta", "1.0.0-rc1")
+        assertGreater("1.0.0+build5", "1.0.0+build3")
     }
 
     @Test

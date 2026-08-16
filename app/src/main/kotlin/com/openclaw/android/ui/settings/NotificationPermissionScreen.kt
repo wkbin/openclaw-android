@@ -30,9 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.openclaw.android.R
 import com.openclaw.android.util.NotificationUtil
 import kotlinx.coroutines.launch
 
@@ -71,10 +73,10 @@ import kotlinx.coroutines.launch
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("通知权限") },
+                title = { Text(stringResource(R.string.notification_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -88,20 +90,24 @@ import kotlinx.coroutines.launch
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                SectionTitle("为什么需要通知权限")
+                SectionTitle(stringResource(R.string.notification_why_section))
                 SettingsGroup {
                     Text(
-                        text = "网关以前台服务运行，Android 13 及以上系统需要通知权限才能在通知栏持续展示运行状态（端口、健康、停止按钮）。未授权时网关仍可运行，但看不到状态通知。",
+                        text = stringResource(R.string.notification_why_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             item {
-                SectionTitle("当前状态")
+                SectionTitle(stringResource(R.string.notification_status_section))
                 SettingsGroup {
                     Text(
-                        text = if (granted) "已授权通知权限" else "未授权通知权限",
+                        text = if (granted) {
+                            stringResource(R.string.notification_granted)
+                        } else {
+                            stringResource(R.string.notification_not_granted)
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (granted) {
                             MaterialTheme.colorScheme.primary
@@ -115,7 +121,7 @@ import kotlinx.coroutines.launch
                 if (permanentlyDenied) {
                     item {
                         Text(
-                            text = "系统已不再弹出权限申请（被永久拒绝）。请在系统设置中手动开启本应用的通知开关。",
+                            text = stringResource(R.string.notification_permanently_denied),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -125,7 +131,7 @@ import kotlinx.coroutines.launch
                             onClick = { NotificationUtil.openAppNotificationSettings(context) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("去系统设置开启")
+                            Text(stringResource(R.string.notification_open_settings))
                         }
                     }
                 } else {
@@ -134,7 +140,7 @@ import kotlinx.coroutines.launch
                             onClick = { request() },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("申请通知权限")
+                            Text(stringResource(R.string.notification_request))
                         }
                     }
                 }

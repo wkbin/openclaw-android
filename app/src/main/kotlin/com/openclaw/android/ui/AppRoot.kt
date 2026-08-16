@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -21,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -30,11 +32,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.openclaw.android.R
 import com.openclaw.android.ui.chat.ChatScreen
 import com.openclaw.android.ui.dashboard.DashboardScreen
+import com.openclaw.android.ui.linux.LinuxScreen
 import com.openclaw.android.ui.logs.LogsScreen
 import com.openclaw.android.ui.navigation.ChatRoute
 import com.openclaw.android.ui.navigation.DashboardRoute
+import com.openclaw.android.ui.navigation.LinuxRoute
 import com.openclaw.android.ui.navigation.LogsRoute
 import com.openclaw.android.ui.navigation.MainRoute
 import com.openclaw.android.ui.navigation.SettingsRoute
@@ -49,10 +54,28 @@ private data class MainDestination(
     val icon: ImageVector,
 )
 
-private val MainDestinations = listOf(
-    MainDestination(DashboardRoute, "仪表盘", Icons.Outlined.Home),
-    MainDestination(LogsRoute, "日志", Icons.AutoMirrored.Outlined.List),
-    MainDestination(SettingsRoute, "配置", Icons.Outlined.Settings),
+@Composable
+private fun mainDestinations(): List<MainDestination> = listOf(
+    MainDestination(
+        DashboardRoute,
+        stringResource(R.string.nav_dashboard),
+        Icons.Outlined.Home,
+    ),
+    MainDestination(
+        LogsRoute,
+        stringResource(R.string.nav_logs),
+        Icons.AutoMirrored.Outlined.List,
+    ),
+    MainDestination(
+        LinuxRoute,
+        stringResource(R.string.nav_linux),
+        Icons.Outlined.Laptop,
+    ),
+    MainDestination(
+        SettingsRoute,
+        stringResource(R.string.nav_settings),
+        Icons.Outlined.Settings,
+    ),
 )
 
 @Composable
@@ -125,7 +148,7 @@ private fun MainScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
-                MainDestinations.forEach { destination ->
+                mainDestinations().forEach { destination ->
                     val selected = currentDestination?.hierarchy
                         ?.any { it.hasRoute(destination.route::class) } == true
                     NavigationBarItem(
@@ -158,6 +181,9 @@ private fun MainScaffold(
             }
             composable<LogsRoute> {
                 LogsScreen()
+            }
+            composable<LinuxRoute> {
+                LinuxScreen()
             }
             composable<SettingsRoute> {
                 SettingsScreen()

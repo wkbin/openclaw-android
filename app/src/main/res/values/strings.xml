@@ -1,8 +1,361 @@
 <resources>
     <string name="app_name">OpenClaw</string>
+
+    <!-- 通用 -->
+    <string name="common_back">返回</string>
+    <string name="common_close">关闭</string>
+    <string name="common_retry">重试</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_save">保存</string>
+    <string name="common_loading">加载中…</string>
+    <string name="common_configured">已配置</string>
+    <string name="common_not_configured">未配置</string>
+    <string name="common_refresh">刷新</string>
+    <string name="common_copy_log">复制日志</string>
+
+    <!-- 通知 -->
     <string name="notification_channel_gateway">网关运行状态</string>
     <string name="notification_running">OpenClaw 运行中 · 端口 %1$d</string>
     <string name="notification_starting">OpenClaw 正在启动</string>
     <string name="notification_stop">停止</string>
-</resources>
 
+    <!-- Chat -->
+    <string name="chat_title">聊天</string>
+    <string name="chat_sessions">会话</string>
+    <string name="chat_new_session">新建会话</string>
+    <string name="chat_clear_session">清空当前会话</string>
+    <string name="chat_sessions_cd">会话列表</string>
+    <string name="chat_input_placeholder">输入消息…</string>
+    <string name="chat_stop_generating">停止生成</string>
+    <string name="chat_send">发送</string>
+    <string name="chat_send_image">发送图片</string>
+    <string name="chat_send_file">发送文件</string>
+    <string name="chat_load_older">加载更早消息</string>
+    <string name="chat_image_ready">图片已就绪，点击发送即可发送</string>
+    <string name="chat_file_ready">文件已就绪，点击发送即可发送</string>
+    <string name="chat_remove_attachment">移除附件</string>
+    <string name="chat_image_too_large">图片过大或读取失败（限制 %1$dMB）</string>
+    <string name="chat_file_too_large">文件过大或读取失败（限制 %1$dMB）</string>
+    <string name="chat_send_failed">发送失败</string>
+    <string name="chat_send_failed_with_error">发送失败：%1$s</string>
+    <string name="time_just_now">刚刚</string>
+    <string name="time_minutes_ago">%1$d分钟前</string>
+    <string name="time_hours_ago">%1$d小时前</string>
+    <string name="time_yesterday">昨天</string>
+    <string name="tool_call_running">调用中</string>
+    <string name="tool_call_done">完成</string>
+    <string name="tool_call_failed">失败</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">仪表盘</string>
+    <string name="dashboard_gateway_title">OpenClaw 网关</string>
+    <string name="dashboard_gateway_subtitle">个人 AI 网关 · 本地运行</string>
+    <string name="dashboard_gateway_version">网关版本</string>
+    <string name="dashboard_runtime">运行状态</string>
+    <string name="dashboard_port">端口</string>
+    <string name="dashboard_health">健康</string>
+    <string name="dashboard_memory">内存</string>
+    <string name="dashboard_uptime">运行时长</string>
+    <string name="dashboard_open_chat">进入聊天</string>
+    <string name="dashboard_starting">启动中</string>
+    <string name="dashboard_stopping">停止中</string>
+    <string name="dashboard_stop">停止</string>
+    <string name="dashboard_start">启动</string>
+    <string name="dashboard_copy_crash_toast">已复制崩溃日志</string>
+    <string name="dashboard_copy_link_toast">链接已复制</string>
+    <string name="dashboard_copy_link">复制链接</string>
+    <string name="dashboard_open_browser">打开浏览器</string>
+    <string name="dashboard_crash_title">上次崩溃日志</string>
+    <string name="dashboard_browser_link">浏览器访问链接</string>
+    <string name="dashboard_waiting_health_title">等待健康检查通过</string>
+    <string name="dashboard_waiting_health_desc">健康检查通过后会自动显示浏览器访问链接。</string>
+    <string name="dashboard_error_title">网关运行异常</string>
+    <string name="dashboard_error_desc">上次运行未能正常启动，请查看上方状态信息后重试。</string>
+    <string name="dashboard_not_started_title">网关尚未启动</string>
+    <string name="dashboard_not_started_desc">点击下方「启动」按钮，网关将作为前台服务在后台运行。</string>
+    <string name="status_running">运行中</string>
+    <string name="status_starting">启动中</string>
+    <string name="status_abnormal">异常</string>
+    <string name="status_stopped">已停止</string>
+    <string name="status_healthy">正常</string>
+    <string name="status_waiting">等待中</string>
+
+    <!-- 日志 -->
+    <string name="logs_title">日志</string>
+    <string name="logs_copy_all_toast">已复制全部日志</string>
+    <string name="logs_exported">日志已导出：%1$s</string>
+    <string name="logs_clear_cd">清空内存日志</string>
+    <string name="logs_export_cd">导出日志</string>
+    <string name="logs_filter_all">全部</string>
+    <string name="logs_auto_scroll">自动滚动</string>
+    <string name="logs_paused">已暂停</string>
+
+    <!-- 底部导航 -->
+    <string name="nav_dashboard">仪表盘</string>
+    <string name="nav_logs">日志</string>
+    <string name="nav_settings">配置</string>
+
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_section_models">模型</string>
+    <string name="settings_models">模型</string>
+    <string name="settings_models_subtitle">厂商 / 默认模型 / API Key</string>
+    <string name="settings_cron">Cron 调度</string>
+    <string name="settings_cron_subtitle">定时任务 / 读写 jobs 配置</string>
+    <string name="settings_skills">技能管理</string>
+    <string name="settings_skills_subtitle">扫描技能目录 / 启用停用</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_theme">主题与缩放</string>
+    <string name="settings_theme_subtitle">深色 / 浅色 / 界面缩放</string>
+    <string name="settings_section_gateway">网关</string>
+    <string name="settings_port">端口</string>
+    <string name="settings_listen_host">监听地址</string>
+    <string name="settings_log_level">日志级别（info/debug）</string>
+    <string name="settings_github_owner">GitHub Owner（更新检查）</string>
+    <string name="settings_github_repo">GitHub Repo（更新检查）</string>
+    <string name="settings_startup_args">启动参数（空格分隔）</string>
+    <string name="settings_auto_start">开机自启</string>
+    <string name="settings_auto_start_subtitle">设备开机后自动启动网关</string>
+    <string name="settings_save_config">保存配置</string>
+    <string name="settings_section_app">应用</string>
+    <string name="settings_update">检查更新</string>
+    <string name="settings_update_subtitle">当前版本 %1$s</string>
+    <string name="settings_about">关于与支持</string>
+    <string name="settings_about_subtitle">GitHub 项目地址</string>
+    <string name="settings_reset">重新初始化</string>
+    <string name="settings_reset_subtitle">清空向导状态，重新配置</string>
+    <string name="settings_section_system">系统</string>
+    <string name="settings_battery">电池优化</string>
+    <string name="settings_battery_subtitle">允许网关后台持续运行</string>
+    <string name="settings_notification">通知权限</string>
+    <string name="settings_notification_subtitle">Android 13+ 需允许前台服务通知</string>
+    <string name="settings_terminal">终端</string>
+    <string name="settings_terminal_subtitle">连续运行 openclaw 命令</string>
+    <string name="settings_vendor">厂商保活</string>
+    <string name="settings_vendor_subtitle">小米 / 华为 / OPPO / vivo / 三星</string>
+    <string name="settings_developer">开发者模式</string>
+    <string name="settings_developer_subtitle">查看和编辑 openclaw.json</string>
+
+    <!-- 关于 -->
+    <string name="about_section_info">应用信息</string>
+    <string name="about_section_project">项目地址</string>
+    <string name="about_app_version">应用版本 %1$s（%2$d）</string>
+    <string name="about_bundled_gateway">内置网关 %1$s</string>
+    <string name="about_current_gateway">当前网关 %1$s</string>
+    <string name="about_copy_toast">已复制项目地址</string>
+    <string name="about_copy">复制</string>
+    <string name="about_open_github">打开 GitHub</string>
+
+    <!-- 命令行 -->
+    <string name="cmd_title">命令行</string>
+    <string name="cmd_input_label">openclaw 命令，例如 doctor / status / models list</string>
+    <string name="cmd_running">运行中…</string>
+    <string name="cmd_run">运行</string>
+    <string name="cmd_clear_output">清空输出</string>
+
+    <!-- Cron -->
+    <string name="cron_title">Cron 调度</string>
+    <string name="cron_add_cd">新建调度</string>
+    <string name="cron_empty">暂无调度任务\n点击右上角 + 新建一个定时任务</string>
+    <string name="cron_add_title">新建调度任务</string>
+    <string name="cron_name_label">任务名称</string>
+    <string name="cron_expr_label">Cron 表达式</string>
+    <string name="cron_expr_hint">例：0 9 * * * 每天 9 点；*/10 * * * * 每 10 分钟</string>
+    <string name="cron_prompt_label">任务内容（发给 Agent 的提示词）</string>
+    <string name="cron_enabled">启用</string>
+    <string name="cron_create">创建</string>
+    <string name="cron_next_last">下次 %1$s · 上次 %2$s</string>
+    <string name="cron_run_now_cd">立即执行</string>
+    <string name="cron_delete_cd">删除</string>
+
+    <!-- 开发者模式 -->
+    <string name="dev_json_title">openclaw.json</string>
+    <string name="dev_json_label">JSON 配置</string>
+    <string name="dev_saved">已保存</string>
+    <string name="dev_save_toast_success">配置已保存</string>
+    <string name="dev_save_toast_fail">保存失败</string>
+
+    <!-- 模型 -->
+    <string name="models_help_desc">每张卡片对应一个模型厂商。已配置 API Key 后即可「设为默认」，点击卡片可展开修改模型和密钥。</string>
+    <string name="models_list_section">模型列表</string>
+    <string name="models_model_subtitle">模型：%1$s</string>
+    <string name="models_no_model_selected">未选择模型</string>
+    <string name="models_custom_provider">自定义供应商</string>
+    <string name="models_add_provider_section">添加自定义供应商</string>
+    <string name="models_add_provider">添加供应商</string>
+    <string name="models_provider_name">供应商名称</string>
+    <string name="models_api_key_optional">API Key（可选，稍后可补）</string>
+    <string name="models_api_key_label">API Key</string>
+    <string name="models_error_empty_name">请输入供应商名称</string>
+    <string name="models_error_builtin">“%1$s” 是内置供应商，请换个名称</string>
+    <string name="models_error_duplicate">供应商“%1$s”已存在</string>
+    <string name="models_default_model_section">默认模型</string>
+    <string name="models_manual_model_id">手动输入模型 ID（如 openai/gpt-4o）</string>
+    <string name="models_key_note">API Key 使用系统级加密存储在本机，不会上传。</string>
+    <string name="models_saved_toast">模型配置已保存</string>
+    <string name="models_save_config">保存模型配置</string>
+    <string name="models_error_default_model">默认模型对应的供应商「%1$s」尚未配置 API Key，请先在上方填写</string>
+    <string name="models_select_model">选择模型</string>
+    <string name="models_model_id">模型 ID</string>
+    <string name="models_model_id_placeholder">如 openai/gpt-4o</string>
+    <string name="models_current">当前</string>
+    <string name="models_set_default">设为默认</string>
+    <string name="models_remove_cd">移除 %1$s</string>
+    <string name="models_collapse_cd">收起</string>
+    <string name="models_expand_cd">展开</string>
+    <string name="models_configured_hint">已配置 API Key，可修改后保存。</string>
+    <string name="models_not_configured_hint">尚未配置，输入 API Key 后保存，即可设为默认。</string>
+    <string name="models_show_keys_cd">显示密钥</string>
+    <string name="models_hide_keys_cd">隐藏密钥</string>
+
+    <!-- 技能 -->
+    <string name="skills_title">技能管理</string>
+    <string name="skills_empty">暂无技能\n需要网关已连接才能扫描技能目录</string>
+    <string name="skills_bundled_badge">内置</string>
+    <string name="skills_disabled_badge">已停用</string>
+
+    <!-- 主题 -->
+    <string name="theme_title">主题与缩放</string>
+    <string name="theme_mode_section">主题模式</string>
+    <string name="theme_follow_system">跟随系统</string>
+    <string name="theme_light">浅色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="theme_scale_section">界面缩放</string>
+    <string name="theme_scale_value">缩放 %1$s%%</string>
+    <string name="theme_save">保存外观设置</string>
+
+    <!-- 电池优化 -->
+    <string name="battery_title">电池优化</string>
+    <string name="battery_why_section">为什么要设置</string>
+    <string name="battery_why_desc">Android 为了省电可能会杀掉后台的网关进程。允许忽略电池优化后，OpenClaw 能更稳定地持续运行。</string>
+    <string name="battery_grant_button">去设置忽略电池优化</string>
+
+    <!-- 通知权限 -->
+    <string name="notification_title">通知权限</string>
+    <string name="notification_why_section">为什么需要通知权限</string>
+    <string name="notification_why_desc">网关以前台服务运行，Android 13 及以上系统需要通知权限才能在通知栏持续展示运行状态（端口、健康、停止按钮）。未授权时网关仍可运行，但看不到状态通知。</string>
+    <string name="notification_status_section">当前状态</string>
+    <string name="notification_granted">已授权通知权限</string>
+    <string name="notification_not_granted">未授权通知权限</string>
+    <string name="notification_permanently_denied">系统已不再弹出权限申请（被永久拒绝）。请在系统设置中手动开启本应用的通知开关。</string>
+    <string name="notification_open_settings">去系统设置开启</string>
+    <string name="notification_request">申请通知权限</string>
+
+    <!-- 厂商保活 -->
+    <string name="vendor_title">厂商保活</string>
+    <string name="vendor_xiaomi_name">小米 / MIUI</string>
+    <string name="vendor_xiaomi_desc">设置 → 应用设置 → 应用管理 → OpenClaw → 省电策略 → 无限制；后台弹出界面/自启动 全部允许。</string>
+    <string name="vendor_huawei_name">华为 / HarmonyOS</string>
+    <string name="vendor_huawei_desc">设置 → 应用 → 应用启动管理 → OpenClaw → 手动管理，打开自启动、关联启动、后台活动。</string>
+    <string name="vendor_oppo_name">OPPO / ColorOS</string>
+    <string name="vendor_oppo_desc">设置 → 电池 → 更多设置 → 耗电保护 → OpenClaw → 允许后台运行。</string>
+    <string name="vendor_vivo_name">vivo / OriginOS</string>
+    <string name="vendor_vivo_desc">设置 → 电池 → 后台耗电管理 → OpenClaw → 允许后台高耗电；并允许自启动。</string>
+    <string name="vendor_samsung_name">三星 / One UI</string>
+    <string name="vendor_samsung_desc">设置 → 电池 → 后台使用限制 → OpenClaw → 设为“不受限制”。</string>
+
+    <!-- 更新 -->
+    <string name="update_title">检查更新</string>
+    <string name="update_screen_title">版本升级</string>
+    <string name="update_idle">当前未检查更新。</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_checking">正在检查 GitHub Release…</string>
+    <string name="update_up_to_date">当前已是最新版本。</string>
+    <string name="update_recheck">重新检查</string>
+    <string name="update_available">发现新版本 %1$s\n当前版本：%2$s\n下载大小：%3$s\n\n%4$s</string>
+    <string name="update_download">下载</string>
+    <string name="update_downloading">正在下载 %1$s：%2$s / %3$s</string>
+    <string name="update_verifying">正在校验 %1$s 的 SHA256。</string>
+    <string name="update_ready">%1$s 已下载并校验完成，可以安装。</string>
+    <string name="update_install_restart">安装并重启</string>
+    <string name="update_installing">正在安装 %1$s。</string>
+    <string name="update_installing_rollback">正在回滚 %1$s。</string>
+    <string name="update_restarting">新版本已切换，正在等待网关健康检查：%1$s</string>
+    <string name="update_completed">升级完成：%1$s。</string>
+    <string name="update_completed_rollback">已回滚到 %1$s。</string>
+    <string name="update_failed">更新失败（%1$s）：%2$s\n当前版本：%3$s</string>
+    <string name="update_fail_network">网络错误</string>
+    <string name="update_fail_checksum">SHA256 校验失败</string>
+    <string name="update_fail_space">存储空间不足</string>
+    <string name="update_fail_extract">解压失败</string>
+    <string name="update_fail_health">网关健康检查失败</string>
+    <string name="update_fail_rollback">回滚失败</string>
+    <string name="update_fail_unknown">未知错误</string>
+    <string name="update_done">完成</string>
+    <string name="update_rollback">回滚</string>
+
+    <!-- 引导向导 -->
+    <string name="setup_previous">上一步</string>
+    <string name="setup_next">下一步</string>
+    <string name="setup_start">开始使用</string>
+    <string name="setup_first_config">首次配置</string>
+    <string name="setup_skip">跳过</string>
+    <string name="setup_step_welcome">欢迎</string>
+    <string name="setup_step_models">模型厂商</string>
+    <string name="setup_step_done">完成</string>
+    <string name="setup_welcome_title">欢迎使用 OpenClaw</string>
+    <string name="setup_welcome_desc">一个内置于 Android 的 OpenClaw 网关，完成简单配置后即可在聊天页使用 Control UI。</string>
+    <string name="setup_feature_ready">开箱即用</string>
+    <string name="setup_feature_ready_sub">内置网关</string>
+    <string name="setup_feature_multi">多模型</string>
+    <string name="setup_feature_multi_sub">主流厂商</string>
+    <string name="setup_feature_encrypt">本地加密</string>
+    <string name="setup_feature_encrypt_sub">Key 仅本机</string>
+    <string name="setup_models_title">模型厂商</string>
+    <string name="setup_models_subtitle">选择厂商和默认模型，再填入 API Key</string>
+    <string name="setup_configured_count">已配置 %1$d/%2$d 个</string>
+    <string name="setup_vendor_label">模型厂商</string>
+    <string name="setup_step1_vendor">1. 选择厂商</string>
+    <string name="setup_step2_model">2. 选择默认模型</string>
+    <string name="setup_default_model_label">默认模型</string>
+    <string name="setup_step3_key">3. 填入 %1$s API Key</string>
+    <string name="setup_api_key_for">%1$s API Key</string>
+    <string name="setup_models_tip">提示：填好当前厂商的 Key 即可开始使用；其他厂商和默认模型可在设置页随时修改。</string>
+    <string name="setup_done_title">准备就绪</string>
+    <string name="setup_done_desc">点击「开始使用」进入主界面并启动网关</string>
+    <string name="setup_config_summary">配置摘要</string>
+    <string name="setup_summary_custom">自定义</string>
+    <string name="setup_custom_count">%1$d 个</string>
+    <string name="setup_default_model">默认模型</string>
+    <string name="setup_not_set">未设置</string>
+    <string name="setup_notification_denied_title">通知权限未开启</string>
+    <string name="setup_notification_denied_desc">开启后可在通知栏查看网关运行状态</string>
+    <string name="setup_notification_open_settings">去系统设置开启</string>
+    <string name="setup_notification_request_again">重新申请权限</string>
+
+    <!-- Linux 完整环境 -->
+    <string name="linux_title">Linux 环境</string>
+    <string name="linux_subtitle">proot 完整 Linux · 可装任何软件</string>
+    <string name="linux_status_idle">未初始化</string>
+    <string name="linux_status_downloading_proot">准备 proot</string>
+    <string name="linux_status_downloading_rootfs">下载 rootfs</string>
+    <string name="linux_status_extracting">解压 rootfs</string>
+    <string name="linux_status_ready">运行就绪</string>
+    <string name="linux_status_failed">准备失败</string>
+    <string name="linux_init">初始化环境</string>
+    <string name="linux_reinit">重新初始化</string>
+    <string name="linux_rootfs_url_label">rootfs 下载源</string>
+    <string name="linux_rootfs_url_hint">官方 Ubuntu base arm64 归档 URL</string>
+    <string name="linux_save_url">保存下载源</string>
+    <string name="linux_state_section">环境状态</string>
+    <string name="linux_settings_section">下载源设置</string>
+    <string name="linux_desc_section">什么是 Linux 环境</string>
+    <string name="linux_desc_body">App 内置 proot 完整 Linux（Debian/Ubuntu rootfs），OpenClaw 网关及任何工具都在其中以官方 Linux 方式运行，不再受离线裁剪包限制：apt、npm、pip 等均可正常使用。</string>
+    <string name="linux_proot_hint">proot 可执行文件请放置于 assets/linux/proot（Termux bionic arm64 版或静态编译版）。</string>
+    <string name="linux_ready_hint">环境已就绪，可在设置页的「命令终端」或后续「Linux 终端」中执行命令。</string>
+    <string name="linux_progress">%1$d%%</string>
+    <string name="linux_terminal_title">Linux 终端</string>
+    <string name="linux_terminal_input_hint">输入命令，回车执行…</string>
+    <string name="linux_terminal_hint_active">会话已连接 — 输入命令开始使用</string>
+    <string name="linux_terminal_hint_idle">会话未连接 — 请先点上方「初始化环境」</string>
+    <string name="nav_linux">Linux</string>
+    <string name="linux_pkg_title">软件包</string>
+    <string name="pkg_update">更新索引</string>
+    <string name="pkg_upgrade">升级全部</string>
+    <string name="pkg_name">软件包名称</string>
+    <string name="pkg_install">安装</string>
+    <string name="pkg_remove">卸载</string>
+    <string name="pkg_hint">在左侧输入包名安装/卸载软件。首次使用请先「更新索引」。</string>
+    <string name="settings_linux_mode">Linux 模式运行网关</string>
+    <string name="settings_linux_mode_subtitle">网关在 proot 完整 Linux 内运行，插件与工具可用 npm/apt 安装；需要先初始化 Linux 环境。</string>
+</resources>

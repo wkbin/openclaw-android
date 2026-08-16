@@ -1,6 +1,7 @@
 package com.openclaw.android.ui.settings
 
 import androidx.activity.compose.BackHandler
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -29,9 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.openclaw.android.R
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,10 +53,10 @@ import kotlinx.coroutines.launch
         contentWindowInsets = WindowInsets.statusBars,
         topBar = {
             TopAppBar(
-                title = { Text("命令行") },
+                title = { Text(stringResource(R.string.cmd_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
             )
@@ -69,7 +72,7 @@ import kotlinx.coroutines.launch
             OutlinedTextField(
                 value = command,
                 onValueChange = { command = it },
-                label = { Text("openclaw 命令，例如 doctor / status / models list") },
+                label = { Text(stringResource(R.string.cmd_input_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -106,13 +109,19 @@ import kotlinx.coroutines.launch
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (running) "运行中…" else "运行")
+                Text(
+                    if (running) {
+                        stringResource(R.string.cmd_running)
+                    } else {
+                        stringResource(R.string.cmd_run)
+                    },
+                )
             }
             OutlinedButton(
                 onClick = { output = "" },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("清空输出")
+                Text(stringResource(R.string.cmd_clear_output))
             }
             Text(
                 text = output,
